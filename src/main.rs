@@ -1,6 +1,11 @@
+#![feature(error_generic_member_access)]
+#![feature(result_option_inspect)]
+
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use salvo::prelude::*;
-
+mod core;
+mod routes;
+mod utils;
 #[handler]
 async fn hello() -> &'static str {
     "Hello World"
@@ -13,7 +18,8 @@ async fn main() {
         .with(fmt::layer())
         .init();
     tracing::info!("Rustle Blog v1.0.0({})", env!("GIT_HASH"));
-    let router = Router::new().get(hello);
+    let mut router = Router::new();
+    router = routes::init(router);
     let acceptor = TcpListener::new("127.0.0.1:5800").bind().await;
     Server::new(acceptor).serve(router).await;
 }
