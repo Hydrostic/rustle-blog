@@ -1,0 +1,10 @@
+[database]
+db_name = ""
+user_name = ""
+password = ""
+port = 3306
+host = ""
+
+[http]
+host = "127.0.0.1"
+port = 5800
