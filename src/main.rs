@@ -21,6 +21,7 @@ async fn main() {
         .with(tracing_subscriber::filter::LevelFilter::INFO)
         .with(fmt::layer())
         .init();
+    #[cfg(not(debug_assertions))]
     tracing::info!("Rustle Blog v1.0.0({})", env!("GIT_HASH"));
     core::config::load_config();
     if let Err(e) = db::init_db().await{ 
