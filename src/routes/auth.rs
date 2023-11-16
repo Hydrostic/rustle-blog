@@ -8,8 +8,14 @@ use crate::utils::response::{ResponseUtil, NormalResponseGlobal::{NotFound, Unau
 
 
 pub fn init(router: Router) -> Router {
-    router.push(
-        Router::with_path("/v1/sign_in").post(sign_in)
+    
+    // #[cfg(debug_assertions)]
+    // router.push(
+    //     Router::with_path("/v1/auth/__test_add_user__").post(sign_in)
+    // );
+    router
+    .push(
+        Router::with_path("/v1/auth/sign_in").post(sign_in)
     )
 }
 #[derive(Debug, Validate, Deserialize, Extractible)]

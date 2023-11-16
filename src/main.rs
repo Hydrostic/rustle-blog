@@ -6,15 +6,12 @@ use tracing::error;
 use core::config::SETTINGS;
 #[macro_use]
 extern crate rbatis;
+
 mod core;
 mod routes;
 mod utils;
 mod db;
 
-#[handler]
-async fn hello() -> &'static str {
-    "Hello World"
-}
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -22,7 +19,11 @@ async fn main() {
         .with(fmt::layer())
         .init();
     #[cfg(not(debug_assertions))]
-    tracing::info!("Rustle Blog v1.0.0({})", env!("GIT_HASH"));
+    tracing::info!("Rustle Blog {}({}), compiled on {}", 
+        env!("BUILD_VERSION"), env!("GIT_HASH"), env!("BUILD_TIME"));
+    let os_info = os_info::get();
+    tracing::info!("running on: {} {}/{}", 
+    os_info.os_type(),os_info.version(), os_info.architecture().unwrap_or("unknown arch"));
     core::config::load_config();
     if let Err(e) = db::init_db().await{ 
         error!("failed to test connection with mysql, did it configured right?\n {:?}", e);

@@ -9,9 +9,9 @@ pub trait ResponseUtil {
 
 #[derive(NormalResponse)]
 pub enum NormalResponseGlobal{
-    #[msg = " {_0} not found"]
+    #[msg = "{_0} not found"]
     NotFound(&'static str),
-    #[msg = " credential {_0} unauthorized"]
+    #[msg = "credential {_0} unauthorized"]
     UnauthorizedCredential(&'static str),
 }
 impl ResponseUtil for salvo::http::Response {

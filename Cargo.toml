@@ -24,3 +24,7 @@ rbdc-mysql = { version = "4.5" }
 log = { version = "0.4.20" }
 rustle-derive = { path = "./derive" }
 rustle-derive-additional = { path = "./derive_additional" }
+os_info = { version = "3", default-features = false }
+
+[build-dependencies]
+chrono = "0.4.31"
