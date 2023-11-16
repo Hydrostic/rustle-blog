@@ -1,14 +1,16 @@
-#![feature(error_generic_member_access)]
-#![feature(result_option_inspect)]
+
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use salvo::prelude::*;
 use tracing::error;
 use core::config::SETTINGS;
+#[macro_use]
+extern crate rbatis;
 mod core;
 mod routes;
 mod utils;
 mod db;
+
 #[handler]
 async fn hello() -> &'static str {
     "Hello World"

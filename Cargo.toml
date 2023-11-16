@@ -22,3 +22,5 @@ rbs = { version = "4.5" }
 rbatis = { version = "4.5" }
 rbdc-mysql = { version = "4.5" }
 log = { version = "0.4.20" }
+rustle-derive = { path = "./derive" }
+rustle-derive-additional = { path = "./derive_additional" }

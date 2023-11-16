@@ -52,6 +52,19 @@ impl From<ParseError> for AppError {
         }
     }
 }
+impl From<rbatis::rbdc::Error> for AppError{
+    #[track_caller]
+    fn from(value: rbatis::rbdc::Error) -> Self {
+        let loc = Location::caller();
+        AppError { 
+            code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+            message: "core.server_error.db".to_string(),
+            source: Some(value.into()),
+            loc: Some(*loc),
+            only_debug_print: false
+        }
+    }
+}
 pub type AppResult = Result<(), AppError>;
 
 #[async_trait]
