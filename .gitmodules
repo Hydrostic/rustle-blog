@@ -1,0 +1,3 @@
+[submodule "rustle-blog-console"]
+	path = rustle-blog-console
+	url = git@github.com:Hydrostic/rustle-blog-console.git
