@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-salvo = "0.58.2"
+salvo = { version = "0.58.2", features = ["session"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -17,7 +17,7 @@ thiserror = "1.0.50"
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 tracing-core = "0.1.32"
 lazy_static = "1.4.0"
-argon2 = "0.5.2"
+argon2 = { version = "0.5.2", features = ["std"] }
 rbs = { version = "4.5" }
 rbatis = { version = "4.5" }
 rbdc-mysql = { version = "4.5" }
@@ -25,6 +25,12 @@ log = { version = "0.4.20" }
 rustle-derive = { path = "./derive" }
 rustle-derive-additional = { path = "./derive_additional" }
 os_info = { version = "3", default-features = false }
+toml = "0.8.8"
+rand = "0.8.5"
+lettre = { version = "0.11", features = ["boring-tls", "smtp-transport", "builder"], default-features = false }
+rust-i18n = "2"
+rust-embed="8.0.0"
+askama = "0.12.1"
 
 [build-dependencies]
 chrono = "0.4.31"

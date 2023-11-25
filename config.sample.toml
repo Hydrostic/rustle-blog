@@ -8,3 +8,15 @@ host = ""
 [http]
 host = "127.0.0.1"
 port = 5800
+
+[mail]
+host = ""
+port = 465
+from = ""
+smtp_user_name = ""
+smtp_password = ""
+max_queue_capacity = 100
+
+[info]
+name = "Rustle Blog"
+link = "https://rustleblog.com"

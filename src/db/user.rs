@@ -1,14 +1,17 @@
-#![allow(non_upper_case_globals)]
-
-use argon2::{Argon2, PasswordVerifier, PasswordHash};
-use lazy_static::lazy_static;
 use rbatis::executor::Executor;
 use serde::{Serialize,Deserialize};
+use rbatis::rbdc::db::ExecResult;
 #[derive(Deserialize,Serialize,Debug)]
 pub struct User{
+    pub id: i32,
     pub name: String,
     pub email: String,
     pub password: String
+}
+#[derive(Deserialize,Serialize,Debug)]
+pub struct UserIdName{
+    pub id: i32,
+    pub name: String,
 }
 
 #[html_sql("src/db/user.html")]
@@ -18,15 +21,20 @@ pub async fn select_by_identity(
 ) -> rbatis::Result<Option<User>> {
     impled!()
 }
-
-lazy_static!{
-    pub static ref Ag: Argon2<'static> = Argon2::default();
+#[html_sql("src/db/user.html")]
+pub async fn select_id_name_by_email(
+    rb: &dyn Executor,
+    email: &str
+) -> rbatis::Result<Option<UserIdName>> {
+    impled!()
 }
-pub fn compare_password(hash: &str, password: &str) -> bool {
-    match PasswordHash::new(hash){
-        Ok(parsed_hash) => 
-            Ag.verify_password(password.as_bytes(), &parsed_hash).is_ok(),
-        Err(_) => false
-    }
-    
+#[html_sql("src/db/user.html")]
+pub async fn create(
+    rb: &dyn Executor,
+    name: &str,
+    email: &str,
+    password: &str,
+    role: u16
+) -> rbatis::Result<ExecResult>{
+    impled!()
 }

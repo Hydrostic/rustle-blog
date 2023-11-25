@@ -4,4 +4,11 @@
         `select *`
         ` from users where name=#{identity} or email=#{identity} limit 1`
     </select>
+    <select id="select_id_name_by_email">
+        `select id,name`
+        ` from users where email=#{email} limit 1`
+    </select>
+    <insert id="create">
+        `insert into users (name,email,password,role) VALUE (#{name},#{email},#{password},#{role})`
+    </insert>
 </mapper>

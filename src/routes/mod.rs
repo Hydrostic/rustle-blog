@@ -1,8 +1,10 @@
 use salvo::Router;
 
 pub mod auth;
+pub mod user;
 
-
-pub fn init(router: Router) -> Router {
-    auth::init(router)
+pub fn init() -> Router{
+    Router::new()
+    .push(auth::init())
+    .push(user::init())
 }

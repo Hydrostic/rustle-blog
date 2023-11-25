@@ -1,0 +1,4 @@
+_version: 2
+user.change_password:
+  en: "change password"
+  zh-CN: "修改密码"
