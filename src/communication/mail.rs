@@ -1,17 +1,18 @@
 use crate::core::config::BaseConfig;
 use anyhow::Context;
 use askama::Template;
-use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{message::Mailbox, SmtpTransport};
-use lettre::{Message, Transport};
+use lettre::{
+    message::{header::ContentType, MessageBuilder},
+    Transport,
+};
 use std::sync::atomic::{self, AtomicBool};
 use tokio::sync::mpsc::{self, Sender};
 use tracing::{error, info};
 pub static MAILER_ENABLED: AtomicBool = AtomicBool::new(false);
 use std::sync::OnceLock;
-// pub static MAILER: RwLock<Option<SmtpTransport>> = RwLock::new(None);
-// pub static MAIL_FROM: RwLock<Option<Mailbox>> = RwLock::new(None);
+
 pub fn init_config(c: &mut BaseConfig) -> Result<bool, anyhow::Error> {
     if c.mail.host.is_empty()
         || c.mail.port == 0
@@ -56,46 +57,20 @@ pub struct MailToLinkTemplate {
     pub warning: String,
     pub link: String,
     pub action: String,
-    pub to: String,
-    pub subject: String,
 }
-impl MailTemplate for MailToLinkTemplate {
-    fn get_content(&self) -> String {
-        self.to_string()
-    }
-    fn get_to(&self) -> String {
-        self.to.to_owned()
-    }
-    fn get_subject(&self) -> String {
-        self.subject.to_owned()
-    }
-}
-pub trait MailTemplate: Send + Sync {
-    fn get_content(&self) -> String;
-    fn get_to(&self) -> String;
-    fn get_subject(&self) -> String;
-}
-pub static TX: OnceLock<Sender<Box<dyn MailTemplate>>> = OnceLock::new();
+pub static TX: OnceLock<Sender<(MessageBuilder, String)>> = OnceLock::new();
 
 fn init_queue(max_capacity: u32, mailer: SmtpTransport, from: Mailbox) {
-    let (tx, mut rx) = mpsc::channel::<Box<dyn MailTemplate>>(max_capacity as usize);
+    let (tx, mut rx) = mpsc::channel::<(MessageBuilder, String)>(max_capacity as usize);
     TX.get_or_init(|| tx);
     tokio::spawn(async move {
         while let Some(mail) = rx.recv().await {
-            let to_mailbox = match mail.get_to().parse() {
-                Ok(m) => m,
-                Err(e) => {
-                    error!("mail<to> not valid, possible of program error: {:?}", e);
-                    continue;
-                }
-            };
             let email = mailer.send(
-                &Message::builder()
-                    .to(to_mailbox)
+                &mail
+                    .0
                     .from(from.clone())
-                    .subject(mail.get_subject())
                     .header(ContentType::TEXT_HTML)
-                    .body(mail.get_content())
+                    .body(mail.1)
                     .unwrap(),
             );
             if let Err(e) = email {
