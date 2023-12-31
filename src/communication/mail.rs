@@ -1,17 +1,28 @@
 use crate::core::config::BaseConfig;
 use anyhow::Context;
-use askama::Template;
+use handlebars::{Handlebars, RenderError};
+use fluent_templates::FluentLoader;
 use lettre::transport::smtp::authentication::Credentials;
-use lettre::{message::Mailbox, SmtpTransport};
+use lettre::{message::Mailbox, SmtpTransport, Message};
 use lettre::{
     message::{header::ContentType, MessageBuilder},
     Transport,
 };
+use once_cell::sync::Lazy;
+use serde::Serialize;
 use std::sync::atomic::{self, AtomicBool};
 use tokio::sync::mpsc::{self, Sender};
 use tracing::{error, info};
 pub static MAILER_ENABLED: AtomicBool = AtomicBool::new(false);
 use std::sync::OnceLock;
+use crate::fs::embed::{MailTemplates, LOCALES};
+static MAIL_HBS: Lazy<Handlebars> = Lazy::new(||{
+    let mut hbs = Handlebars::new();
+    hbs.register_helper("fluent", Box::new(FluentLoader::new(&*LOCALES)));
+    hbs.register_embed_templates::<MailTemplates>().unwrap();
+    hbs
+});
+
 
 pub fn init_config(c: &mut BaseConfig) -> Result<bool, anyhow::Error> {
     if c.mail.host.is_empty()
@@ -44,20 +55,41 @@ pub fn init_config(c: &mut BaseConfig) -> Result<bool, anyhow::Error> {
         c.mail.mail_enabled = true;
         MAILER_ENABLED.store(true, atomic::Ordering::SeqCst);
     }
+    
+       
     Ok(false)
+    
 }
 
-#[derive(Template)]
-#[template(path = "email/tolink.html")]
-
+#[derive(Serialize)]
 pub struct MailToLinkTemplate {
     pub site_name: String,
-    pub greeting: String,
-    pub probably_action: String,
-    pub warning: String,
+    pub site_link: String,
+    pub user: String,
     pub link: String,
     pub action: String,
+    pub lang: String
 }
+impl MailToLinkTemplate{
+    pub fn generate(&self) -> Result<String, RenderError>{
+        MAIL_HBS.render("tolink.hbs", &serde_json::json!(self))
+    }
+}
+#[derive(Serialize)]
+pub struct MailVerifyTemplate {
+    pub site_name: String,
+    pub site_link: String,
+    pub user: String,
+    pub code: String,
+    pub action: String,
+    pub lang: String
+}
+impl MailVerifyTemplate{
+    pub fn generate(&self) -> Result<String, RenderError>{
+        MAIL_HBS.render("verify.hbs", &serde_json::json!(self))
+    }
+}
+
 pub static TX: OnceLock<Sender<(MessageBuilder, String)>> = OnceLock::new();
 
 fn init_queue(max_capacity: u32, mailer: SmtpTransport, from: Mailbox) {
@@ -78,4 +110,22 @@ fn init_queue(max_capacity: u32, mailer: SmtpTransport, from: Mailbox) {
             }
         }
     });
+}
+
+pub enum MailQueueError {
+    MailBusy,
+    ParseError(anyhow::Error),
+}
+pub fn try_send(content: String, subject: &str, object: &str, email: &str) -> Result<(),MailQueueError> {
+    if let Err(_) = TX.get().clone().unwrap().try_send((
+        Message::builder()
+            .to(format!("{} <{}>", subject, email)
+                .parse()
+                .context("mail<to> not valid, possible of program error").map_err(|e| MailQueueError::ParseError(e))?)
+            .subject(subject),
+        content,
+    )) {
+        return Err(MailQueueError::MailBusy);
+    }
+    Ok(())
 }

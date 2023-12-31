@@ -3,16 +3,13 @@
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use salvo::prelude::*;
 use tracing::error;
-use core::config::SETTINGS;
+use core::config::read_config;
 use middlewares::session as sessionMiddleware;
 #[macro_use]
 extern crate rbatis;
-#[macro_use]
-extern crate rust_i18n;
 
-i18n!("locales");
 mod core;
-mod routes;
+mod providers;
 mod utils;
 mod db;
 mod middlewares;
@@ -36,8 +33,8 @@ async fn main() {
         return;
     };
     let router = Router::new().hoop(sessionMiddleware::new_middleware())
-    .push(routes::init());
-    let http_config = &SETTINGS.read().unwrap().http;
+    .push(providers::init());
+    let http_config = &read_config().http;
     let acceptor = TcpListener::new(
         format!("{}:{}", http_config.host, http_config.port)).bind().await;
     Server::new(acceptor).serve(router).await;

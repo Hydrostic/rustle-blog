@@ -1,12 +1,13 @@
 use config::Config;
+use sync_cow::SyncCow;
 use serde::{Deserialize, Serialize};
 use tracing::error;
-use std::{env, sync::RwLock, fs::File, io::Write};
+use std::{env, fs::File, io::Write, sync::Arc};
 use lazy_static::lazy_static;
 use crate::communication::mail;
-use crate::utils::password_salt;
+use crate::utils::{password_salt, hmac};
 use crate::middlewares::session;
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct DatabaseConfig{
     pub db_name: String,
     pub user_name: String,
@@ -14,7 +15,7 @@ pub struct DatabaseConfig{
     pub host: String,
     pub port: u32
 }
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct MailConfig{
     #[serde(skip)]
     pub mail_enabled: bool,
@@ -34,24 +35,26 @@ pub struct MailConfig{
 fn max_queue_capacity_default() -> u32{
     100
 }
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct HttpConfig{
     pub host: String,
     pub port: u32
 }
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct SecurityConfig{
     #[serde(default)]
     pub password_salt: String,
     #[serde(default)]
-    pub session_secret: String
+    pub session_secret: String,
+    #[serde(default)]
+    pub credential_secret: String
 }
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct InfoConfig{
     pub name: String,
     pub link: String,
 }
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct BaseConfig{
     pub database: DatabaseConfig,
     pub http: HttpConfig,
@@ -64,14 +67,13 @@ pub struct BaseConfig{
 }
 lazy_static! {
     pub static ref DEBUG_MODE: bool = !env::var("DEBUG_ENABLED").is_err();
-    pub static ref SETTINGS: RwLock<BaseConfig> = RwLock::new(BaseConfig {
-        ..Default::default()
-    });
+    pub static ref SETTINGS: Arc<SyncCow<BaseConfig>> = Arc::new(SyncCow::new(BaseConfig{..Default::default()}.to_owned()));
 }
 pub fn generate_config(c: &mut BaseConfig) -> Result<(),anyhow::Error>{
     let mut need_rewrite = false;
     need_rewrite = password_salt::init_config(c)? || need_rewrite;
     need_rewrite = session::init_config(c)? || need_rewrite;
+    need_rewrite = hmac::init_config(c)? || need_rewrite;
     need_rewrite = mail::init_config(c)? || need_rewrite;
 
     if need_rewrite{
@@ -83,6 +85,10 @@ pub fn generate_config(c: &mut BaseConfig) -> Result<(),anyhow::Error>{
     }
     Ok(())
 }
+pub fn read_config() -> Arc<BaseConfig>{
+    let cow = &*SETTINGS.clone();
+    cow.read()
+}
 pub fn load_config(){
     let settings = Config::builder()
     .add_source(config::File::with_name("./config.toml"))
@@ -91,6 +97,8 @@ pub fn load_config(){
     
     let mut config = settings.try_deserialize::<BaseConfig>().unwrap();
     generate_config(&mut config).expect("exit due to config error");
-    let mut sett = SETTINGS.write().unwrap();
-    *sett = config;
+    let write_arc = SETTINGS.clone();
+    (&*write_arc).edit(|x|{
+        *x = config;
+    });
 }

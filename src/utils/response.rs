@@ -1,5 +1,5 @@
 use salvo::{writing::Text, Scribe};
-use super::error_handling::{AppResult, AppError};
+use super::error_handling::AppResult;
 use rustle_derive::NormalResponse;
 use rustle_derive_additional::MessagePrintable;
 pub trait ResponseUtil {
@@ -18,6 +18,8 @@ pub enum NormalResponseGlobal{
     UnauthorizedStatus,
     #[msg = "feature {_0} not enabled"]
     FeatureNotEnabled(&'static str),
+    #[msg = "unknown lang"]
+    UnknownLang
 }
 impl ResponseUtil for salvo::http::Response {
     fn ok(&mut self) -> AppResult{

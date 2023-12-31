@@ -1,12 +1,20 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "https://raw.githubusercontent.com/rbatis/rbatis/master/rbatis-codegen/mybatis-3-mapper.dtd">
 <mapper>
-    <select id="select_by_identity">
+    <select id="select_by_identity_with_password">
         `select *`
         ` from users where name=#{identity} or email=#{identity} limit 1`
     </select>
-    <select id="select_id_name_by_email">
-        `select id,name`
+    <select id="select_by_email">
+        `select id,name,email`
         ` from users where email=#{email} limit 1`
+    </select>
+    <select id="select_by_id">
+        `select id,name,email`
+        ` from users where id=#{id} limit 1`
+    </select>
+    <select id="select_by_id_with_password">
+        `select id,name,email,password`
+        ` from users where id=#{id} limit 1`
     </select>
     <insert id="create">
         `insert into users (name,email,password,role) VALUE (#{name},#{email},#{password},#{role})`
