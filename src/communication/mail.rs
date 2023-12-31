@@ -119,7 +119,7 @@ pub enum MailQueueError {
 pub fn try_send(content: String, subject: &str, object: &str, email: &str) -> Result<(),MailQueueError> {
     if let Err(_) = TX.get().clone().unwrap().try_send((
         Message::builder()
-            .to(format!("{} <{}>", subject, email)
+            .to(format!("{} <{}>", object, email)
                 .parse()
                 .context("mail<to> not valid, possible of program error").map_err(|e| MailQueueError::ParseError(e))?)
             .subject(subject),
