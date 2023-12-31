@@ -22,3 +22,18 @@ pub async fn create(
 ) -> rbatis::Result<ExecResult>{
     impled!()
 }
+
+#[html_sql("src/db/verification.html")]
+pub async fn select_by_id(
+    rb: &dyn Executor,
+    id: i32
+) -> rbatis::Result<Option<Verification>>{
+    impled!()
+}
+#[html_sql("src/db/verification.html")]
+pub async fn delete_by_id(
+    rb: &dyn Executor,
+    id: i32
+) -> rbatis::Result<ExecResult>{
+    impled!()
+}

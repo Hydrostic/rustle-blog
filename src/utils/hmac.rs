@@ -22,3 +22,7 @@ pub fn hmac_signature(key: &str, msg: &str) -> String {
 
     return general_purpose::STANDARD.encode(&code_bytes.to_vec());
 }
+
+pub fn hmac_verify(key: &str, msg: &str, received: &str) -> bool{
+    hmac_signature(key, msg) == received
+}

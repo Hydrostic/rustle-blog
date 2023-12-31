@@ -29,7 +29,6 @@ os_info = { version = "3", default-features = false }
 toml = "0.8.8"
 rand = "0.8.5"
 lettre = { version = "0.11", features = ["boring-tls", "smtp-transport", "builder"], default-features = false }
-rust-i18n = "2"
 rust-embed="8.0.0"
 askama = "0.12.1"
 handlebars = { version = "4.5.0", features = ["rust-embed"] }

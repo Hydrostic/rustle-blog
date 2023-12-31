@@ -54,3 +54,19 @@ pub async fn create(
 ) -> rbatis::Result<ExecResult>{
     impled!()
 }
+#[html_sql("src/db/user.html")]
+pub async fn update_password(
+    rb: &dyn Executor,
+    id: i32,
+    password: &str
+) -> rbatis::Result<ExecResult>{
+    impled!()
+}
+#[html_sql("src/db/user.html")]
+pub async fn update_email(
+    rb: &dyn Executor,
+    id: i32,
+    email: &str
+) -> rbatis::Result<ExecResult>{
+    impled!()
+}

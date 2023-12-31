@@ -3,4 +3,12 @@
     <insert id="create">
         `insert into verifications (user,identity,random_code,action,created_at) VALUE (#{user},#{identity},#{random_code},#{action},NOW())`
     </insert>
+    <select id="select_by_id">
+        `select *`
+        ` from verifications where id=#{id} limit 1`
+    </select>
+    <delete id="delete_by_id">
+        `delete from verifications`
+        `where id=#{id} limit 1`
+    </delete>
 </mapper>

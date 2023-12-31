@@ -13,6 +13,7 @@ pub struct AppError {
     pub source: Option<anyhow::Error>,
     #[serde(skip)]
     pub loc: Option<Location<'static>>,
+    #[serde(skip)]
     pub only_debug_print: bool
 }
 

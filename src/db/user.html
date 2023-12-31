@@ -19,4 +19,10 @@
     <insert id="create">
         `insert into users (name,email,password,role) VALUE (#{name},#{email},#{password},#{role})`
     </insert>
+    <update id="update_password">
+       `update users set password=#{password} where id=#{id}`
+    </update>
+    <update id="update_email">
+        `update users set email=#{email} where id=#{id}`
+     </update>
 </mapper>
