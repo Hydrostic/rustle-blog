@@ -5,8 +5,7 @@ use salvo::prelude::*;
 use tracing::error;
 use core::config::read_config;
 use middlewares::session as sessionMiddleware;
-#[macro_use]
-extern crate rbatis;
+use middlewares::request_id as requestIdMiddleWare;
 
 mod core;
 mod providers;
@@ -19,7 +18,7 @@ mod fs;
 async fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::filter::LevelFilter::INFO)
-        .with(fmt::layer())
+        .with(fmt::layer().compact())
         .init();
     #[cfg(not(debug_assertions))]
     tracing::info!("Rustle Blog {}({}), compiled on {}", 
@@ -28,11 +27,15 @@ async fn main() {
     tracing::info!("running on: {} {}/{}", 
     os_info.os_type(),os_info.version(), os_info.architecture().unwrap_or("unknown arch"));
     core::config::load_config();
-    if let Err(e) = db::init_db().await{ 
-        error!("failed to test connection with mysql, did it configured right?\n {:?}", e);
+    if !db::init_db().await{ 
         return;
     };
-    let router = Router::new().hoop(sessionMiddleware::new_middleware())
+    // todo imporve error throwing
+    if let Err(e) = providers::auth::service::init_rbac_cache().await{ 
+        error!("failed to , did it configured right?\n {:?}", e);
+        return;
+    };
+    let router = Router::new().hoop(requestIdMiddleWare::request_id_middleware).hoop(sessionMiddleware::new_middleware())
     .push(providers::init());
     let http_config = &read_config().http;
     let acceptor = TcpListener::new(

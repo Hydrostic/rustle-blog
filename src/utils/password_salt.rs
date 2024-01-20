@@ -8,7 +8,10 @@ use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
 };
 use lazy_static::lazy_static;
-use tracing::info;
+use salvo::hyper::StatusCode;
+use tracing::{info, instrument, error};
+
+use super::error_handling::AppError;
 
 lazy_static! {
     pub static ref Ag: Argon2<'static> = Argon2::default();
@@ -39,9 +42,16 @@ pub fn compare_password(hash: &str, password: &str) -> bool {
         Err(_) => false,
     }
 }
-
-pub fn generate_password(password: &str) -> Result<String, anyhow::Error> {
-    Ok(Ag
-        .hash_password(password.as_bytes(), SALT.read().unwrap().as_salt())?
-        .to_string())
+#[instrument(name = "generate_password", skip_all)]
+pub fn generate_password(password: &str) -> Result<String, AppError> {
+    match Ag
+        .hash_password(password.as_bytes(), SALT.read().unwrap().as_salt()){
+            Ok(t) => Ok(t.to_string()),
+            Err(e) => {
+                error!("failed to hash password, {:?}", e);
+                Err(
+                    AppError::UnexpectedError(StatusCode::INTERNAL_SERVER_ERROR, String::from("error.util.hash"))
+                )
+            },
+        }
 }

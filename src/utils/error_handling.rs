@@ -1,102 +1,67 @@
+
+
 use salvo::http::{ParseError, StatusCode};
 use salvo::prelude::*;
-use serde::Serialize;
-use std::panic::Location;
-use tracing::error;
-use validator;
-use crate::core::config;
-#[derive(Serialize)]
-pub struct AppError {
-    pub code: u16,
-    pub message: String,
-    #[serde(skip)]
-    pub source: Option<anyhow::Error>,
-    #[serde(skip)]
-    pub loc: Option<Location<'static>>,
-    #[serde(skip)]
-    pub only_debug_print: bool
+use tracing::debug;
+use crate::core::config::DEBUG_MODE;
+#[derive(Debug)]
+pub enum AppError {
+    ExpectedError(String),
+    UnexpectedError(StatusCode, String),
 }
 
-impl From<anyhow::Error> for AppError {
-    #[track_caller]
-    fn from(value: anyhow::Error) -> Self {
-        let loc = Location::caller();
+pub trait RemapError<T> {
+    fn remap(self) -> Result<T, AppError>;
+}
 
-        AppError {
-            code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            message: "core.server_error".to_string(),
-            source: Some(value),
-            loc: Some(*loc),
-            only_debug_print: false
+impl From<ParseError> for AppError {
+    #[tracing::instrument(name="parse_payload",skip_all)]
+    fn from(value: ParseError) -> Self {
+        if *DEBUG_MODE {
+            debug!("failed to parse payload, {:?}", value);
         }
+        AppError::UnexpectedError(StatusCode::BAD_REQUEST, String::from("error.request.payload.unrecognizable"))
     }
 }
 impl From<validator::ValidationErrors> for AppError {
     fn from(value: validator::ValidationErrors) -> Self {
-        AppError {
-            code: StatusCode::BAD_REQUEST.as_u16(),
-            message: "web.validate_failed".to_string(),
-            source: Some(value.into()),
-            loc: None,
-            only_debug_print: true
+        if *DEBUG_MODE {
+            debug!("failed to validate payload, {:?}", value);
         }
+        AppError::UnexpectedError(StatusCode::BAD_REQUEST, String::from("error.request.payload.invalid"))
     }
 }
-impl From<ParseError> for AppError {
-    fn from(_value: ParseError) -> Self {
-        AppError {
-            code: StatusCode::BAD_REQUEST.as_u16(),
-            message: "core.unrecognizable_request_payload".to_string(),
-            source: None,
-            loc: None,
-            only_debug_print: true
-        }
-    }
-}
-impl From<rbatis::rbdc::Error> for AppError{
-    #[track_caller]
-    fn from(value: rbatis::rbdc::Error) -> Self {
-        let loc = Location::caller();
-        AppError { 
-            code: StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-            message: "core.server_error.db".to_string(),
-            source: Some(value.into()),
-            loc: Some(*loc),
-            only_debug_print: false
-        }
-    }
-}
-pub type AppResult = Result<(), AppError>;
+
+pub type AppResult<T> = Result<T, AppError>;
 
 #[async_trait]
 impl Writer for AppError {
-    async fn write(mut self, req: &mut Request, _depot: &mut Depot, res: &mut Response) {
-        let mut loc_text = String::from("unknown path");
-        if let Some(loc) = self.loc {
-            loc_text = format!("{}:{}", loc.file(), loc.line());
-        }
-        if let Some(ref e) = self.source{
-            if *config::DEBUG_MODE || !self.only_debug_print {
-                error!(target: "rustle_blog::web", 
-                        "\nError happened at {} when requesting {}\n{:?}", 
-                        loc_text, 
-                        req.uri(),
-                        e
-                );
+    async fn write(mut self, _req: &mut Request, depot: &mut Depot, res: &mut Response) {
+        let message = match self{
+            AppError::ExpectedError(message) => {
+                res.status_code(StatusCode::OK);
+                message
+            },
+            AppError::UnexpectedError(code, message) => {
+                res.status_code(code);
+                message
             }
-        }
-        
-        res.status_code(StatusCode::from_u16(self.code).unwrap());
-        res.render(Json(self));
+        };
+        res.render(Text::Json(
+            format!(r#"{{"message":"{}","request_id":"{}"}}"#, 
+                message, 
+                depot.get::<String>("request_id").unwrap_or(&String::from("unknown"))
+            )
+        ));
     }
 }
-#[macro_export]
-macro_rules! print_error {
-    ($old: expr) => {{
-        let r = $old;
-        if let Err(e) = r {
-            tracing::error!("{:?}(line {})", e, line!());
-        }
-        $old
-    }};
-}
+// #[macro_export]
+// macro_rules! print_error {
+//     ($old: expr) => {{
+//         let r = $old;
+//         if let Err(e) = r {
+//             tracing::error!("{:?}(line {})", e, line!());
+//         }
+//         $old
+//     }};
+// }

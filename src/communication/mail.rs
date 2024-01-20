@@ -15,7 +15,9 @@ use tokio::sync::mpsc::{self, Sender};
 use tracing::{error, info};
 pub static MAILER_ENABLED: AtomicBool = AtomicBool::new(false);
 use std::sync::OnceLock;
+
 use crate::fs::embed::{MailTemplates, LOCALES};
+
 static MAIL_HBS: Lazy<Handlebars> = Lazy::new(||{
     let mut hbs = Handlebars::new();
     hbs.register_helper("fluent", Box::new(FluentLoader::new(&*LOCALES)));
@@ -114,14 +116,17 @@ fn init_queue(max_capacity: u32, mailer: SmtpTransport, from: Mailbox) {
 
 pub enum MailQueueError {
     MailBusy,
-    ParseError(anyhow::Error),
+    ParseError,
 }
 pub fn try_send(content: String, subject: &str, object: &str, email: &str) -> Result<(),MailQueueError> {
     if let Err(_) = TX.get().clone().unwrap().try_send((
         Message::builder()
             .to(format!("{} <{}>", object, email)
                 .parse()
-                .context("mail<to> not valid, possible of program error").map_err(|e| MailQueueError::ParseError(e))?)
+                .map_err(|e| {
+                    error!("mail<to> not valid, possible of program error, {:?}", e);
+                    MailQueueError::ParseError
+                })?)
             .subject(subject),
         content,
     )) {

@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 use proc_macro::TokenStream;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, ItemEnum, Meta, Expr, Fields, Index, Lit, Member, LitStr};
+use syn::{parse_macro_input, ItemEnum, Meta, Expr, Fields, Index, Lit, Member, LitStr, ItemFn};
 use quote::{quote, format_ident};
 extern crate rustle_derive_additional;
 
@@ -56,6 +56,18 @@ pub fn normal_response(input: TokenStream) -> TokenStream {
                 }
             }
         }
+        
+    }.into()
+}
+
+#[proc_macro_attribute]
+pub fn handler_with_instrument(_args: TokenStream, input: TokenStream) -> TokenStream {
+    
+    let input = parse_macro_input!(input as ItemFn);
+    quote!{
+        #[::salvo::handler]
+        #[::tracing::instrument(fields(uri = req.uri().path(), method = req.method().as_str(), request_id=depot.get::<String>("request_id").unwrap_or(&String::from("unknown"))),skip_all)]
+        #input
         
     }.into()
 }

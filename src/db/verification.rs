@@ -1,39 +1,52 @@
-use rbatis::rbdc::datetime::DateTime;
 use serde::{Serialize,Deserialize};
-use rbatis::executor::Executor;
-use rbatis::rbdc::db::ExecResult;
+use sqlx::{MySqlPool, types::chrono};
 
-#[derive(Deserialize,Serialize,Debug)]
+use super::DBResult;
+
+#[derive(Deserialize,Serialize,Debug,sqlx::FromRow)]
 pub struct Verification{
     pub id: i32,
     pub user: i32,
     pub identity: String,
     pub random_code: String,
     pub action: i16,
-    pub created_at: DateTime
+    pub created_at: chrono::NaiveDateTime
 }
-#[html_sql("src/db/verification.html")]
+
 pub async fn create(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     user: i32,
     identity: &str,
     random_code: &str,
     action: i16,
-) -> rbatis::Result<ExecResult>{
-    impled!()
+) -> DBResult<i32> {
+    Ok(sqlx::query("INSERT INTO verifications (user,identity,random_code,action,created_at) VALUES (?,?,?,?,NOW())")
+        .bind(user)
+        .bind(identity)
+        .bind(random_code)
+        .bind(action)
+        .execute(pool)
+        .await?.last_insert_id() as i32)
 }
 
-#[html_sql("src/db/verification.html")]
 pub async fn select_by_id(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32
-) -> rbatis::Result<Option<Verification>>{
-    impled!()
+) -> DBResult<Option<Verification>> {
+    Ok(sqlx::query_as::<_,Verification>("SELECT * FROM verifications WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?)
 }
-#[html_sql("src/db/verification.html")]
+
+
 pub async fn delete_by_id(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32
-) -> rbatis::Result<ExecResult>{
-    impled!()
+) -> DBResult<()>{
+    sqlx::query("DELETE FROM verifications WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }

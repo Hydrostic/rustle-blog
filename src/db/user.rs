@@ -1,7 +1,10 @@
-use rbatis::executor::Executor;
 use serde::{Serialize,Deserialize};
-use rbatis::rbdc::db::ExecResult;
-#[derive(Deserialize,Serialize,Debug)]
+
+use tracing::instrument;
+use sqlx::MySqlPool;
+
+use super::DBResult;
+#[derive(Deserialize,Serialize,Debug,sqlx::FromRow)]
 pub struct User{
     pub id: i32,
     pub name: String,
@@ -14,59 +17,92 @@ pub struct UserIdName{
     pub id: i32,
     pub name: String,
 }
-
-#[html_sql("src/db/user.html")]
+#[instrument(err,skip_all)]
 pub async fn select_by_identity_with_password(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     identity: &str
-) -> rbatis::Result<Option<User>> {
-    impled!()
+) -> DBResult<Option<User>> {
+    sqlx::query_as::<_,User>("SELECT * FROM users WHERE name = ? OR email = ?")
+        .bind(identity)
+        .bind(identity)
+        .fetch_optional(pool)
+        .await
 }
 
-#[html_sql("src/db/user.html")]
+#[instrument(err,skip_all)]
 pub async fn select_by_id(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32
-) -> rbatis::Result<Option<User>> {
-    impled!()
+) -> DBResult<Option<User>> {
+    sqlx::query_as::<_,User>("SELECT id,name,email,role FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
 }
-#[html_sql("src/db/user.html")]
+
+#[instrument(err,skip_all)]
 pub async fn select_by_id_with_password(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32
-) -> rbatis::Result<Option<User>> {
-    impled!()
+) -> DBResult<Option<User>> {
+    sqlx::query_as::<_,User>("SELECT * FROM users WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
 }
-#[html_sql("src/db/user.html")]
+
+#[instrument(err,skip_all)]
 pub async fn select_by_email(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     email: &str
-) -> rbatis::Result<Option<User>> {
-    impled!()
+) -> DBResult<Option<User>> {
+    sqlx::query_as::<_,User>("SELECT id,name,email,role FROM users WHERE email = ?")
+        .bind(email)
+        .fetch_optional(pool)
+        .await
 }
-#[html_sql("src/db/user.html")]
+
+#[instrument(err,skip_all)]
 pub async fn create(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     name: &str,
     email: &str,
     password: &str,
     role: i16
-) -> rbatis::Result<ExecResult>{
-    impled!()
+) -> DBResult<i32> {
+    Ok(sqlx::query("INSERT INTO users (name,email,password,role) VALUES (?,?,?,?)")
+        .bind(name)
+        .bind(email)
+        .bind(password)
+        .bind(role)
+        .execute(pool)
+        .await?.last_insert_id() as i32)
 }
-#[html_sql("src/db/user.html")]
+
+#[instrument(err,skip_all)]
 pub async fn update_password(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32,
     password: &str
-) -> rbatis::Result<ExecResult>{
-    impled!()
+) -> DBResult<()> {
+    sqlx::query("UPDATE users SET password = ? WHERE id = ?")
+        .bind(password)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
-#[html_sql("src/db/user.html")]
+
+#[instrument(err,skip_all)]
 pub async fn update_email(
-    rb: &dyn Executor,
+    pool: &MySqlPool,
     id: i32,
     email: &str
-) -> rbatis::Result<ExecResult>{
-    impled!()
+) -> DBResult<()>{
+    sqlx::query("UPDATE users SET email = ? WHERE id = ?")
+        .bind(email)
+        .bind(id)
+        .execute(pool)
+        .await?;
+        Ok(())
 }
