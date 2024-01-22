@@ -19,12 +19,9 @@ anyhow = { version = "1.0.75", features = ["backtrace"] }
 tracing-core = "0.1.32"
 lazy_static = "1.4.0"
 argon2 = { version = "0.5.2", features = ["std"] }
-# rbs = { version = "4.5" }
-# rbatis = { version = "4.5" }
-# rbdc-mysql = { version = "4.5" }
 log = { version = "0.4.20" }
 rustle-derive = { path = "./derive" }
-rustle-derive-additional = { path = "./derive_additional" }
+# rustle-derive-additional = { path = "./derive_additional" }
 os_info = { version = "3", default-features = false }
 toml = "0.8.8"
 rand = "0.8.5"
@@ -40,5 +37,8 @@ sync_cow = "0.1.1"
 dashmap = "5.5.3"
 sqlx = { version = "0.7.3", features = ["mysql","chrono","runtime-tokio"] }
 uuid = { version = "1.7.0", features = ["v4"] }
+# evlru = "0.1.1"
+lru = "0.12.1"
+chrono = "0.4.31"
 [build-dependencies]
 chrono = "0.4.31"

@@ -3,12 +3,12 @@ use proc_macro::TokenStream;
 use syn::spanned::Spanned;
 use syn::{parse_macro_input, ItemEnum, Meta, Expr, Fields, Index, Lit, Member, LitStr, ItemFn};
 use quote::{quote, format_ident};
-extern crate rustle_derive_additional;
+// extern crate rustle_derive_additional;
 
 
 
-#[proc_macro_derive(NormalResponse, attributes(msg))]
-pub fn normal_response(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(NormalError, attributes(msg))]
+pub fn normal_error(input: TokenStream) -> TokenStream {
     
     let input = parse_macro_input!(input as ItemEnum);
     let ident_name = input.ident;
@@ -45,18 +45,28 @@ pub fn normal_response(input: TokenStream) -> TokenStream {
         };
         let temp=variant.ident.clone();
         quote!{
-            #ident_name::#temp #pat => format!(#literal_text)
+            #ident_name::#temp #pat => crate::utils::error_handling::AppError::ExpectedError(format!(#literal_text))
         }
     });
     quote!{
-        impl ::rustle_derive_additional::MessagePrintable for #ident_name{
-            fn print(&self) -> String{
+        impl crate::utils::response::NormalErrorHelper for #ident_name{
+            fn to_error(&self) -> crate::utils::error_handling::AppError{
                 match self{
                     #(#pat_arms,)*
                 }
             }
         }
-        
+        use crate::utils::response::NormalErrorHelper;
+        impl<T> From<#ident_name> for AppResult<T>{
+            fn from(e: #ident_name) -> AppResult<T>{
+                Err(e.to_error())
+            }
+        }
+        impl From<#ident_name> for AppError{
+            fn from(e: #ident_name) -> AppError{
+                e.to_error()
+            }
+        }
     }.into()
 }
 

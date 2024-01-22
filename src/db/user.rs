@@ -2,9 +2,9 @@ use serde::{Serialize,Deserialize};
 
 use tracing::instrument;
 use sqlx::MySqlPool;
-
+use sqlx::FromRow;
 use super::DBResult;
-#[derive(Deserialize,Serialize,Debug,sqlx::FromRow)]
+#[derive(Deserialize,Serialize,Debug,FromRow)]
 pub struct User{
     pub id: i32,
     pub name: String,

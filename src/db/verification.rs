@@ -1,9 +1,9 @@
 use serde::{Serialize,Deserialize};
 use sqlx::{MySqlPool, types::chrono};
-
+use tracing::instrument;
 use super::DBResult;
-
-#[derive(Deserialize,Serialize,Debug,sqlx::FromRow)]
+use sqlx::FromRow;
+#[derive(Deserialize,Serialize,Debug,FromRow)]
 pub struct Verification{
     pub id: i32,
     pub user: i32,
@@ -12,7 +12,7 @@ pub struct Verification{
     pub action: i16,
     pub created_at: chrono::NaiveDateTime
 }
-
+#[instrument(err,skip_all)]
 pub async fn create(
     pool: &MySqlPool,
     user: i32,
@@ -28,7 +28,7 @@ pub async fn create(
         .execute(pool)
         .await?.last_insert_id() as i32)
 }
-
+#[instrument(err,skip_all)]
 pub async fn select_by_id(
     pool: &MySqlPool,
     id: i32
@@ -39,7 +39,7 @@ pub async fn select_by_id(
         .await?)
 }
 
-
+#[instrument(err,skip_all)]
 pub async fn delete_by_id(
     pool: &MySqlPool,
     id: i32

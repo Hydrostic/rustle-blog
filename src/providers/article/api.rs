@@ -1,6 +1,7 @@
+use rustle_derive::handler_with_instrument;
 use salvo::prelude::*;
 
-use crate::{utils::{error_handling::AppResult, response::ResponseUtil}, middlewares::auth::auth_middleware};
+use crate::{utils::{error_handling::AppResult, response::ResponseUtil}, middlewares::auth::auth_middleware, providers::auth::service::check_permission_api};
 // use crate::permission_check;
 pub fn init() -> Router {
 
@@ -21,22 +22,9 @@ pub fn init() -> Router {
 //     pub password: &'a str,
 // }
 
-#[handler]
-async fn create(_req: &mut Request, _depot: &mut Depot, res: &mut Response) -> AppResult<()> {
-    // let a = permission_check!(res, deopt, "test1");
-    // let req_data = req.parse_json::<SignInReq>().await?;
-    // req_data.validate()?;
-    // let user_data = userDao::select_by_identity_with_password(get_db_pool(), req_data.name).await?;
-    // if user_data.is_none() {
-    //     return normal_response(UnauthorizedCredential("name/password"));
-    // }
+#[handler_with_instrument]
+async fn create(req: &mut Request, depot: &mut Depot, res: &mut Response) -> AppResult<()> {
+    check_permission_api(depot.session().unwrap().get::<i32>("user_id"), "CREATE_ARTICLE").await?;
 
-    // let user_data = user_data.unwrap();
-    // if !password_salt::compare_password(&user_data.password.unwrap(), req_data.password) {
-    //     return normal_response(UnauthorizedCredential("name/password"));
-    // }
-    // let mut session = Session::new();
-    // session.insert("user_id", user_data.id).unwrap();
-    // depot.set_session(session);
     res.ok()
 }

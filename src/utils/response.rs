@@ -1,29 +1,39 @@
-use salvo::{writing::Text, Scribe};
+use salvo::{writing::Text, Scribe, Writer, async_trait, Request, Depot, Response, http::StatusCode};
 use super::error_handling::{AppResult, AppError};
-use rustle_derive::NormalResponse;
-use rustle_derive_additional::MessagePrintable;
+
 pub trait ResponseUtil {
     fn ok(&mut self) -> AppResult<()>;
     fn data<P: Scribe>(&mut self, piece: P) -> AppResult<()>;
 }
 
-#[derive(NormalResponse)]
-pub enum NormalResponseGlobal{
-    #[msg = "{_0} not found"]
-    NotFound(&'static str),
-    #[msg = "credential {_0} unauthorized"]
-    UnauthorizedCredential(&'static str),
-    #[msg = "status unauthorized"]
-    UnauthorizedStatus,
-    // #[msg = "feature {_0} not enabled"]
-    // FeatureNotEnabled(&'static str),
-    #[msg = "unknown lang"]
-    UnknownLang,
-    // #[msg = "permission denied"]
-    // PermissionDenied
+
+#[async_trait]
+impl Writer for AppError {
+    async fn write(mut self, _req: &mut Request, depot: &mut Depot, res: &mut Response) {
+        render_error(self, depot, res);
+    }
 }
-pub fn normal_response(res: impl MessagePrintable) -> AppResult<()>{
-    Err(AppError::ExpectedError(String::from(res.print())))
+
+pub trait NormalErrorHelper: Sized{
+    fn to_error(&self) -> AppError;
+}
+pub fn render_error(err: AppError, depot: &mut Depot, res: &mut Response){
+    let message = match err{
+        AppError::ExpectedError(message) => {
+            res.status_code(StatusCode::OK);
+            message
+        },
+        AppError::UnexpectedError(code, message) => {
+            res.status_code(code);
+            message
+        }
+    };
+    res.render(Text::Json(
+        format!(r#"{{"message":"{}","request_id":"{}"}}"#, 
+            message, 
+            depot.get::<String>("request_id").unwrap_or(&String::from("unknown"))
+        )
+    ));
 }
 impl ResponseUtil for salvo::http::Response {
     fn ok(&mut self) -> AppResult<()>{

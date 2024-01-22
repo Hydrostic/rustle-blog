@@ -1,9 +1,9 @@
 
 
 use salvo::http::{ParseError, StatusCode};
-use salvo::prelude::*;
 use tracing::debug;
 use crate::core::config::DEBUG_MODE;
+use rustle_derive::NormalError;
 #[derive(Debug)]
 pub enum AppError {
     ExpectedError(String),
@@ -34,26 +34,20 @@ impl From<validator::ValidationErrors> for AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
-#[async_trait]
-impl Writer for AppError {
-    async fn write(mut self, _req: &mut Request, depot: &mut Depot, res: &mut Response) {
-        let message = match self{
-            AppError::ExpectedError(message) => {
-                res.status_code(StatusCode::OK);
-                message
-            },
-            AppError::UnexpectedError(code, message) => {
-                res.status_code(code);
-                message
-            }
-        };
-        res.render(Text::Json(
-            format!(r#"{{"message":"{}","request_id":"{}"}}"#, 
-                message, 
-                depot.get::<String>("request_id").unwrap_or(&String::from("unknown"))
-            )
-        ));
-    }
+#[derive(NormalError)]
+pub enum NormalErrorGlobal{
+    #[msg = "{_0} not found"]
+    NotFound(&'static str),
+    #[msg = "credential {_0} unauthorized"]
+    UnauthorizedCredential(&'static str),
+    #[msg = "status unauthorized"]
+    UnauthorizedStatus,
+    // #[msg = "feature {_0} not enabled"]
+    // FeatureNotEnabled(&'static str),
+    #[msg = "unknown lang"]
+    UnknownLang,
+    #[msg = "permission denied"]
+    PermissionDenied
 }
 // #[macro_export]
 // macro_rules! print_error {

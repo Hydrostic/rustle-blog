@@ -1,14 +1,14 @@
 
 use serde::{Serialize,Deserialize};
-
-
+use chrono::NaiveDateTime;
+use sqlx::FromRow;
 #[derive(Serialize,Deserialize,Debug)]
 pub struct ArticleLinkContent{
     pub content_id: i32,
     pub draft_content_id: i32,
     pub summary_content_id: i32,
 }
-#[derive(Serialize,Deserialize,Debug)]
+#[derive(Serialize,Deserialize,Debug,FromRow)]
 pub struct Article{
     pub id: i32,
     pub author: String,
@@ -22,8 +22,8 @@ pub struct Article{
     pub draft_state: i16,
     pub is_pinned: i16,
     pub is_commentable: i16,
-    // pub created_at: DateTime,
-    // pub updated_at: DateTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub password: Option<String>,
     pub title: Option<String>,
     pub alias: Option<String>,

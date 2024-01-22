@@ -1,12 +1,8 @@
 use crate::db::{user as userDao, get_db_pool};
 use crate::middlewares::auth::auth_middleware;
-use crate::utils::error_handling::AppResult;
+use crate::utils::error_handling::{AppResult, NormalErrorGlobal::UnauthorizedCredential};
 use crate::utils::password_salt;
-use crate::utils::response::normal_response;
-use crate::utils::response::{
-    NormalResponseGlobal::UnauthorizedCredential,
-    ResponseUtil,
-};
+use crate::utils::response::ResponseUtil;
 use rustle_derive::handler_with_instrument;
 use salvo::prelude::*;
 use salvo::session::Session;
@@ -40,12 +36,12 @@ async fn sign_in(req: &mut Request, depot: &mut Depot, res: &mut Response) -> Ap
     req_data.validate()?;
     let user_data = userDao::select_by_identity_with_password(get_db_pool(), req_data.name).await?;
     if user_data.is_none() {
-        return normal_response(UnauthorizedCredential("name/password"));
+        return UnauthorizedCredential("name/password").into();
     }
 
     let user_data = user_data.unwrap();
     if !password_salt::compare_password(&user_data.password.unwrap(), req_data.password) {
-        return normal_response(UnauthorizedCredential("name/password"));
+        return UnauthorizedCredential("name/password").into();
     }
     let mut session = Session::new();
     session.insert("user_id", user_data.id).unwrap();

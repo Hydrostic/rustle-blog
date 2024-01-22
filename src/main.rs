@@ -32,7 +32,7 @@ async fn main() {
     };
     // todo imporve error throwing
     if let Err(e) = providers::auth::service::init_rbac_cache().await{ 
-        error!("failed to , did it configured right?\n {:?}", e);
+        error!("failed to init rbac, did it configured right?\n {:?}", e);
         return;
     };
     let router = Router::new().hoop(requestIdMiddleWare::request_id_middleware).hoop(sessionMiddleware::new_middleware())

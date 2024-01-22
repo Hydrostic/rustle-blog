@@ -20,3 +20,6 @@ max_queue_capacity = 100
 [info]
 name = "Rustle Blog"
 link = "https://rustleblog.com"
+
+[cache]
+max_user_role_entity = 50

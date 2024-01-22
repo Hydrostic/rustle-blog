@@ -16,6 +16,14 @@ pub struct DatabaseConfig{
     pub port: u32
 }
 #[derive(Deserialize, Serialize, Debug, Default, Clone)]
+pub struct CacheConfig{
+    #[serde(default="max_user_role_entity_default")]
+    pub max_user_role_entity: u32,
+}
+fn max_user_role_entity_default() -> u32{
+    100
+}
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 pub struct MailConfig{
     #[serde(skip)]
     pub mail_enabled: bool,
