@@ -1,9 +1,9 @@
-use serde::{Serialize,Deserialize};
+use serde::Serialize;
 use sqlx::{MySqlPool, types::chrono};
 use tracing::instrument;
 use super::DBResult;
 use sqlx::FromRow;
-#[derive(Deserialize,Serialize,Debug,FromRow)]
+#[derive(Serialize,Debug,FromRow)]
 pub struct Verification{
     pub id: i32,
     pub user: i32,

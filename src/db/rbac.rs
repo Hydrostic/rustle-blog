@@ -1,23 +1,23 @@
-use serde::{Serialize,Deserialize};
+use serde::Serialize;
 use sqlx::MySqlPool;
 
 use super::DBResult;
 use tracing::instrument;
 use sqlx::FromRow;
 
-#[derive(Serialize,Deserialize,Debug,FromRow)]
+#[derive(Serialize,Debug,FromRow)]
 pub struct RoleToUser{
     pub id: i32,
     pub role: i32,
     pub user: i32,
 }
-#[derive(Serialize,Deserialize,Debug,FromRow)]
+#[derive(Serialize,Debug,FromRow)]
 pub struct PermissionToRole{
     pub id: i32,
     pub role: i32,
     pub permission: String,
 }
-#[derive(Serialize,Deserialize,Debug,FromRow)]
+#[derive(Serialize,Debug,FromRow)]
 pub struct Role{
     pub id: i32,
     pub name: String,

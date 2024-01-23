@@ -40,5 +40,10 @@ uuid = { version = "1.7.0", features = ["v4"] }
 # evlru = "0.1.1"
 lru = "0.12.1"
 chrono = "0.4.31"
+ammonia = "3"
+
 [build-dependencies]
 chrono = "0.4.31"
+
+[workspace]
+members = [".","derive"]

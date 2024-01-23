@@ -1,6 +1,7 @@
 
 
 use salvo::hyper::StatusCode;
+use serde::{Serialize, Deserialize};
 use sqlx::{MySqlPool, mysql::MySqlPoolOptions, Row};
 use once_cell::sync::OnceCell;
 use tracing::{error, info};
@@ -18,6 +19,7 @@ pub fn get_db_pool() -> &'static MySqlPool{
     DB_POOL.get().unwrap()
 }
 type DBResult<T> = Result<T, sqlx::Error>;
+
 impl From<sqlx::Error> for AppError{
     fn from(e: sqlx::Error) -> Self {
         match e{
@@ -32,6 +34,7 @@ impl From<sqlx::Error> for AppError{
     }
 
 }
+
 pub async fn init_db() -> bool {
     let db_config = &SETTINGS.read().database;
     let address = format!("mysql://{}:{}@{}:{}/{}",
@@ -55,4 +58,12 @@ pub async fn init_db() -> bool {
     DB_POOL.set(pool).unwrap();
     info!("connected. Mysql version: {}", version);
     true
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum SortOrder {
+    #[serde(rename="asc")]
+    Asc,
+    #[serde(rename="desc")]
+    Desc
 }

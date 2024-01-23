@@ -6,7 +6,9 @@ edition = "2021"
 [dependencies]
 syn = { version = "2.0.39", features = ["full","printing"]}
 quote = "1.0"
-rustle-derive-additional = { path = "../derive_additional" }
+# rustle-derive-additional = { path = "../derive_additional" }
 proc-macro2 = "1.0.69"
+convert_case = "0.6.0"
+serde = "1.0.190"
 [lib]
 proc-macro = true
