@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["--debug"],
             "cwd": "${workspaceFolder}"
         },
         {
@@ -31,7 +31,7 @@
                     "test",
                     "--no-run",
                     "--bin=rustle-blog",
-                    "--package=rustle-blog"
+                    "--package=rustle-blog",
                 ],
                 "filter": {
                     "name": "rustle-blog",

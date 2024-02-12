@@ -1,57 +1,63 @@
-#![allow(non_upper_case_globals)]
-
-use std::sync::RwLock;
-use crate::core::config::BaseConfig;
+use crate::types::config::BaseConfig;
+use tracing::{info, error};
+use crate::types::config::ConfigInitializer;
 use argon2::{
-    password_hash::errors::Error::B64Encoding,
-    password_hash::{rand_core::OsRng, SaltString},
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::SaltString,
+    password_hash::rand_core::OsRng,
+    password_hash::PasswordHash,
+    password_hash::PasswordHasher,
+    password_hash::PasswordVerifier,
+    password_hash,
+    Argon2
 };
-use lazy_static::lazy_static;
-use salvo::hyper::StatusCode;
-use tracing::{info, instrument, error};
+use rustle_derive::ErrorHelper;
+use crate::types::err::AppResult;
 
-use super::error_handling::AppError;
+pub struct PasswordSaltConfig;
+impl ConfigInitializer for PasswordSaltConfig{
+    fn initialize(c: &mut BaseConfig) -> Result<bool, ()> {
+        let len = c.security.password_salt.len();
 
-lazy_static! {
-    pub static ref Ag: Argon2<'static> = Argon2::default();
-    pub static ref SALT: RwLock<SaltString> = RwLock::new(SaltString::generate(&mut OsRng));
-}
-
-pub fn init_config(c: &mut BaseConfig) -> Result<bool, anyhow::Error> {
-    if c.security.password_salt.is_empty() {
-        info!("password salt was empty, going to generate one");
-        c.security.password_salt = SALT.read().unwrap().as_str().to_string();
-        return Ok(true);
-    }
-    match SaltString::from_b64(&c.security.password_salt) {
-        Ok(t) => *SALT.write().unwrap() = t,
-        Err(_e @ B64Encoding(e1)) => {
-            let e1: anyhow::Error = e1.into();
-            return Err(e1.context("salt in config is invalid, {:?}"));
+        if len == 0{
+            info!("generate a new password salt");
+            c.security.password_salt = SaltString::generate(&mut OsRng).to_string();
+            return Ok(true);
         }
-        Err(e) => return Err(e.into()),
-    };
-    Ok(false)
+        match SaltString::from_b64(&c.security.password_salt){
+            Ok(_) => {},
+            Err(e) => {
+                error!("failed to parse password salt: {:?}", e);
+                return Err(());
+            }
+        }
+        Ok(false)
+    }
 }
+
 pub fn compare_password(hash: &str, password: &str) -> bool {
     match PasswordHash::new(hash) {
-        Ok(parsed_hash) => Ag
-            .verify_password(password.as_bytes(), &parsed_hash)
+        Ok(parsed_hash) =>
+            Argon2::default().verify_password(password.as_bytes(), &parsed_hash)
             .is_ok(),
         Err(_) => false,
     }
 }
-#[instrument(name = "generate_password", skip_all)]
-pub fn generate_password(password: &str) -> Result<String, AppError> {
-    match Ag
-        .hash_password(password.as_bytes(), SALT.read().unwrap().as_salt()){
+#[derive(ErrorHelper)]
+#[err(msg = "error.password.salt", internal)]
+struct PasswordSaltInternalError;
+
+#[derive(ErrorHelper)]
+#[err(user)]
+struct PasswordTooLong;
+pub fn generate_password(password: &str, salt: &str) -> AppResult<String> {
+    let salt = SaltString::from_b64(salt).unwrap();
+    match Argon2::default()
+        .hash_password(password.as_bytes(), &salt){
             Ok(t) => Ok(t.to_string()),
+            Err(password_hash::Error::OutputSize { .. }) => Err(PasswordTooLong.into()),
             Err(e) => {
-                error!("failed to hash password, {:?}", e);
-                Err(
-                    AppError::UnexpectedError(StatusCode::INTERNAL_SERVER_ERROR, String::from("error.util.hash"))
-                )
-            },
+                error!("failed to salt for password: {:?}", e);
+                Err(PasswordSaltInternalError.into())
+            }
         }
 }

@@ -1,37 +1,35 @@
+use std::borrow::Cow;
 use chrono::Utc;
-use rustle_derive::handler_with_instrument;
-use salvo::prelude::*;
+use ntex::web::{self, Responder};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use validator::Validate;
-use crate::utils::error_handling::AppError;
-use crate::utils::{error_handling::AppResult, response::ResponseUtil};
-use crate::middlewares::auth::auth_middleware;
 use crate::providers::auth::service::check_permission_api;
 use crate::db::{get_db_pool, article::{ArticleFilterable, ArticleSortable, ArticlePublicBrief}};
 use crate::db::{article as articleDao, article::Article};
+use crate::utils::request::{get_user_id, RequestPayload};
+use validator::Validate;
+use crate::types::err::AppResult;
+use crate::types::err::GlobalUserError::TooMaxParameter;
+use crate::middlewares::Auth;
 
-pub fn init() -> Router {
-
-        Router::with_path("/v1/article")
-            .push(
-                Router::with_path("/create")
-                    .hoop(auth_middleware)
-                    .post(create),
-            )
-            .push(
-                Router::with_path("/list")
-                    .post(list),
-            )
+pub fn init(cfg: &mut web::ServiceConfig){
+    cfg.service(
+        web::scope("/v1/article")
+            .service(list)
+            .configure(|r| {
+                r.service(web::scope("/").wrap(Auth).service(create));
+            })
+    );
 }
 
-#[derive(Debug, Validate, Deserialize, Extractible)]
-#[salvo(extract(default_source(from = "body", parse = "json")))]
+#[derive(Debug, Validate, Deserialize)]
 struct CreateReq<'a> {
     #[validate(length(min = 1, max = 255))]
-    pub title: &'a str,
+    #[serde(borrow)]
+    pub title: Cow<'a,str>,
     #[validate(length(min = 1, max = 255))]
-    pub alias: &'a str,
+    #[serde(borrow)]
+    pub alias: Cow<'a,str>,
     #[validate(range(min = 1, max = 3))]
     pub public_state: i16,
     pub is_pinned: bool,
@@ -39,17 +37,21 @@ struct CreateReq<'a> {
     #[validate(length(min = 0, max = 1073741823))]
     // the max size of mysql longtext is 4,294,967,295 bytes, for the worst case, every character takes 4 bytes
     // that would be 1,073,741,823 characters
-    pub draft: &'a str,
+    #[serde(borrow)]
+    pub draft: Cow<'a,str>,
     #[validate(length(min = 0, max = 1073741823))]
-    pub generated: String,
+    #[serde(borrow)]
+    pub generated: Cow<'a,str>,
 }
-#[handler_with_instrument]
-async fn create(req: &mut Request, depot: &mut Depot, res: &mut Response) -> AppResult<()> {
-    let user_id = depot.session().unwrap().get::<i32>("user_id").unwrap();
-    check_permission_api(Some(user_id), "CREATE_ARTICLE").await?;
-    let req_data = req.parse_json::<CreateReq>().await?;
+#[web::post("/create")]
+async fn create(req: web::HttpRequest, mut payload: web::types::Payload) -> AppResult<impl Responder> {
+    let mut payload = RequestPayload::new(&mut payload);
+    let req_data: CreateReq<'_> = payload.parse().await?;
     req_data.validate()?;
-    let draft_content_id = articleDao::save_content(get_db_pool(), req_data.draft).await?;
+    
+    let user_id = get_user_id(req);
+    check_permission_api(Some(user_id), "CREATE_ARTICLE").await?;
+    let draft_content_id = articleDao::save_content(get_db_pool(), &req_data.draft).await?;
     let content_id = articleDao::save_content(get_db_pool(), &ammonia::clean(&req_data.generated)).await?;
     let article_object = Article{
         author: user_id,
@@ -64,15 +66,14 @@ async fn create(req: &mut Request, depot: &mut Depot, res: &mut Response) -> App
         ..Default::default()
     };
     let id = articleDao::create(get_db_pool(), &article_object).await?;
-    res.data(Json(
+    Ok(web::HttpResponse::Ok().body(
         json!({
             "id": id
         })
     ))
 }
 
-#[derive(Debug, Validate, Deserialize, Extractible)]
-#[salvo(extract(default_source(from = "body", parse = "json")))]
+#[derive(Debug, Validate, Deserialize)]
 struct ListReq {
     filter: Vec<ArticleFilterable>,
     sort: Vec<ArticleSortable>,
@@ -86,19 +87,21 @@ struct ListRes {
     total: i32,
     articles: Vec<ArticlePublicBrief>
 }
-#[handler_with_instrument]
-async fn list(req: &mut Request, depot: &mut Depot, res: &mut Response) -> AppResult<()> {
-    let req_data = req.parse_json::<ListReq>().await?;
+#[web::post("/list")]
+async fn list(mut payload: web::types::Payload) -> AppResult<impl Responder> {
+    let mut payload = RequestPayload::new(&mut payload);
+    let req_data: ListReq = payload.parse().await?;
     req_data.validate()?;
-    let db_res = articleDao::list::<ArticlePublicBrief>(get_db_pool(), 
-        req_data.limit, 
-        (req_data.page-1).checked_mul(req_data.limit).ok_or(AppError::UnexpectedError(StatusCode::BAD_REQUEST, "math.overflow".to_string()))?, 
-        req_data.filter, 
+    let db_res = articleDao::list::<ArticlePublicBrief>(get_db_pool(),
+        req_data.limit,
+        (req_data.page-1).checked_mul(req_data.limit).ok_or(TooMaxParameter)?,
+        req_data.filter,
         req_data.sort).await?;
-    res.data(
-        Json(ListRes{
+    Ok(web::HttpResponse::Ok().json(
+        &ListRes{
             total: db_res.0,
             articles: db_res.1
-        })
-    )
+        }
+    ))
 }
+

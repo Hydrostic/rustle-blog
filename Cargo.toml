@@ -6,22 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-salvo = { version = "0.63.1", features = ["session"] }
 tokio = { version = "1", features = ["full"] }
+salvo = { version = "0.65.2" }
+salvo-cors = { version = "0.65.2" }
+salvo_extra = { version = "0.65.1", default-features = false, features = ["size-limiter"]}
 tracing = "0.1"
 tracing-subscriber = "0.3"
-config = "0.13.1"
 validator = { version = "0.16", features = ["derive"] }
 serde = { version = "1.0.190", features = ["derive"] }
 serde_json = "1.0.64"
-thiserror = "1.0.50"
 anyhow = { version = "1.0.75", features = ["backtrace"] }
-tracing-core = "0.1.32"
-lazy_static = "1.4.0"
-argon2 = { version = "0.5.2", features = ["std"] }
-log = { version = "0.4.20" }
 rustle-derive = { path = "./derive" }
-# rustle-derive-additional = { path = "./derive_additional" }
 os_info = { version = "3", default-features = false }
 toml = "0.8.8"
 rand = "0.8.5"
@@ -37,10 +32,18 @@ sync_cow = "0.1.1"
 dashmap = "5.5.3"
 sqlx = { version = "0.7.3", features = ["mysql","chrono","runtime-tokio"] }
 uuid = { version = "1.7.0", features = ["v4"] }
-# evlru = "0.1.1"
 lru = "0.12.1"
-chrono = "0.4.31"
+chrono = { version = "0.4.31", features = ["serde"] }
 ammonia = "3"
+clap = { version = "4.4.18", features = ["derive"] }
+serde-inline-default = "0.2.0"
+pasetors = "0.6.8"
+argon2 = "0.5.3"
+tokio-util = { version = "0.7.10", features = ["io-util"] }
+futures-util = "0.3.30"
+# trait-variant = "0.1.1"
+# tokio-stream = "0.1.14"
+ntex = { version = "1.1.0", features = [ "tokio" ]}
 
 [build-dependencies]
 chrono = "0.4.31"

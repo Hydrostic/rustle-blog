@@ -1,3 +1,5 @@
-pub mod session;
 pub mod auth;
-pub mod request_id;
+pub mod log;
+
+pub use auth::Auth;
+pub use log::Log;

@@ -1,32 +1,43 @@
 use fluent_templates::{Loader, LanguageIdentifier};
 use rand::Rng;
-use salvo::hyper::StatusCode;
 use tracing::error;
 
-use crate::core::config::read_config;
-use crate::communication::mail::{self, MailToLinkTemplate, MailVerifyTemplate, MAILER_ENABLED, MailQueueError};
+use crate::external::mail::{self, MailToLinkTemplate, MailVerifyTemplate, MAILER_ENABLED, MailQueueError};
 use crate::db::user::User;
 use crate::db::{verification as verificationDao, get_db_pool};
-use crate::fs::embed::LOCALES;
-use crate::utils::error_handling::{AppResult, AppError};
+use crate::external::fs::embed::LOCALES;
+use crate::types::err::AppResult;
 use crate::utils::hmac::hmac_signature;
 use std::sync::atomic;
+use rustle_derive::ErrorHelper;
+use crate::get_config;
+use crate::types::err::GlobalUserError::FeatureNotEnabled;
 
-
+#[derive(ErrorHelper)]
+#[err(internal)]
+pub enum MailInternalError{
+    #[err(msg = "error.mail.render")]
+    Render,
+    #[err(msg = "error.mail.busy")]
+    Busy,
+    #[err(msg = "error.mail.parse")]
+    Parse
+}
 pub async fn send_tolink_email(email: &str, user: &User, action: &str, lang: &LanguageIdentifier) -> AppResult<()>{
     if !MAILER_ENABLED.load(atomic::Ordering::Relaxed) {
-        return Err(AppError::UnexpectedError(StatusCode::NOT_IMPLEMENTED, String::from("error.mail.not_enabled")));
+        return Err(FeatureNotEnabled.into());
     }
     let verification_res = verificationDao::create(get_db_pool(), user.id, &user.email, "", 0).await?;
     let mut sig = hmac_signature(
-        &read_config().security.credential_secret,
+        &get_config!(security).credential_secret,
         &verification_res.to_string(),
     );
     sig.push('.');
     sig.push_str(&verification_res.to_string());
+    let site_info = get_config!(info);
     let mail_content = MailToLinkTemplate {
-        site_name: read_config().info.name.clone(),
-        site_link: read_config().info.link.clone(),
+        site_name: site_info.name.clone(),
+        site_link: site_info.link.clone(),
         user: user.name.clone(),
         link: sig,
         action: LOCALES.lookup(lang, action).unwrap(),
@@ -34,17 +45,17 @@ pub async fn send_tolink_email(email: &str, user: &User, action: &str, lang: &La
     };
     let mail_str = mail_content.generate().map_err(|x| {
         error!("failed to generate mail content, {:?}", x);
-        AppError::UnexpectedError(StatusCode::INTERNAL_SERVER_ERROR, String::from("error.mail.render"))
+        MailInternalError::Render
     })?;
      match mail::try_send(mail_str, 
         LOCALES.lookup(lang, "email_check").unwrap().as_str(), 
         &user.name,
         &email){
         Err(MailQueueError::MailBusy) => return Err(
-            AppError::UnexpectedError(StatusCode::SERVICE_UNAVAILABLE, String::from("error.mail.busy"))
+            MailInternalError::Busy.into()
         ),
         Err(MailQueueError::ParseError) => return Err(
-            AppError::UnexpectedError(StatusCode::SERVICE_UNAVAILABLE, String::from("error.mail.parse"))
+            MailInternalError::Parse.into()
         ),
         Ok(_) => {}
     };
@@ -53,7 +64,7 @@ pub async fn send_tolink_email(email: &str, user: &User, action: &str, lang: &La
 
 pub async fn send_verify_email(user: &User, action: &str, lang: &LanguageIdentifier) -> AppResult<()>{
     if !MAILER_ENABLED.load(atomic::Ordering::Relaxed) {
-        return Err(AppError::UnexpectedError(StatusCode::NOT_IMPLEMENTED, String::from("error.mail.not_enabled")));
+        return Err(FeatureNotEnabled.into());
     }
 
     let code_chars: Vec<char> = (0..6)
@@ -61,9 +72,10 @@ pub async fn send_verify_email(user: &User, action: &str, lang: &LanguageIdentif
     .collect();
     let code: String = code_chars.into_iter().collect();
     _ = verificationDao::create(get_db_pool(), user.id, &user.email, &code, 0).await?;
+    let site_info = get_config!(info);
     let mail_content = MailVerifyTemplate {
-        site_name: read_config().info.name.clone(),
-        site_link: read_config().info.link.clone(),
+        site_name: site_info.name.clone(),
+        site_link: site_info.link.clone(),
         user: user.name.clone(),
         code,
         action: LOCALES.lookup(lang, action).unwrap(),
@@ -71,17 +83,17 @@ pub async fn send_verify_email(user: &User, action: &str, lang: &LanguageIdentif
     };
     let mail_str = mail_content.generate().map_err(|x| {
         error!("failed to generate mail content, {:?}", x);
-        AppError::UnexpectedError(StatusCode::INTERNAL_SERVER_ERROR, String::from("error.mail.render"))
+        MailInternalError::Render
     })?;
      match mail::try_send(mail_str, 
         LOCALES.lookup(lang, "identity_check").unwrap().as_str(), 
         &user.name,
         &user.email){
             Err(MailQueueError::MailBusy) => return Err(
-                AppError::UnexpectedError(StatusCode::SERVICE_UNAVAILABLE, String::from("error.mail.busy"))
+                MailInternalError::Busy.into()
             ),
             Err(MailQueueError::ParseError) => return Err(
-                AppError::UnexpectedError(StatusCode::SERVICE_UNAVAILABLE, String::from("error.mail.parse"))
+                MailInternalError::Parse.into()
             ),
         Ok(_) => {}
     };
