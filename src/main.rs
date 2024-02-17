@@ -31,5 +31,5 @@ async fn main()  {
     ) {
         return;
     }
-    providers::run().await.inspect_err(|e| tracing::error!("http server: {e}"));
+    let _ =providers::run().await.inspect_err(|e| tracing::error!("http server: {e}"));
 }

@@ -39,6 +39,7 @@ pub struct HttpConfig {
     pub host: String,
     #[serde_inline_default(5800)]
     pub port: u16,
+    pub max_upload_size: usize
 }
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 pub struct SecurityConfig {

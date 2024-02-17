@@ -7,9 +7,6 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-salvo = { version = "0.65.2" }
-salvo-cors = { version = "0.65.2" }
-salvo_extra = { version = "0.65.1", default-features = false, features = ["size-limiter"]}
 tracing = "0.1"
 tracing-subscriber = "0.3"
 validator = { version = "0.16", features = ["derive"] }
@@ -41,9 +38,10 @@ pasetors = "0.6.8"
 argon2 = "0.5.3"
 tokio-util = { version = "0.7.10", features = ["io-util"] }
 futures-util = "0.3.30"
-# trait-variant = "0.1.1"
-# tokio-stream = "0.1.14"
 ntex = { version = "1.1.0", features = [ "tokio" ]}
+trie-rs = "0.2.0"
+pin-project = "1.1.4"
+strum_macros = "0.26.1"
 
 [build-dependencies]
 chrono = "0.4.31"

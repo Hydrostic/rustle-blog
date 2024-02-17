@@ -3,39 +3,41 @@ use crate::db::rbac::RoleSimple;
 use crate::db::user::User;
 use crate::db::{get_db_pool, rbac as rbacDao, user as userDao, verification as verificationDao};
 use crate::external::fs::interface::FsProvider;
+use crate::external::fs::DEFAULT_POLICY_ID;
 use crate::get_config;
 use crate::middlewares::Auth;
 use crate::providers::auth::service::check_permission_api;
 use crate::types::err::GlobalUserError::{
-    CredentialUnauthorized, NotFound, TooMaxParameter, UnknownLang,
+    CredentialUnauthorized, NotFound, TooMaxParameter, UnknownLang
 };
-use crate::types::err::AppResult;
+use crate::types::err::{AppResult, GlobalInternalError};
 use crate::utils::hmac::hmac_verify;
-use crate::utils::password_salt;
-use crate::utils::request::{get_user_id, RequestPayload};
+use crate::utils::{password_salt, sniffer};
+use crate::utils::request::{check_content_length, check_mime, get_user_id, RequestPayload, ALLOWED_IMAGE_MIME};
 use fluent_templates::LanguageIdentifier;
 use futures_util::TryStreamExt;
+use crate::utils::stream::{AsyncReadMerger, ReaderChunkedStream};
 use ntex::web::{self, Responder};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use std::borrow::Cow;
+use std::io::Cursor;
+use std::path::Path;
 use validator::Validate;
 
 pub fn init(cfg: &mut web::ServiceConfig){
     cfg.service(
         web::scope("/v1/user")
             .service(verify_email)
-            .service(upload_avatar)
-            .configure(|r|{
-                r.service(
-                    web::scope("/").wrap(Auth)
-                    .service(change_email) // auth
-                    .service(change_password) // auth
-                    .service(get_all_list) // auth
-                );
-            })
-            
-            
+            .service(get_avatar)
+    );
+    cfg.service(
+        web::scope("/v1/user1").wrap(Auth)
+                    .service(change_email)
+                    .service(change_password) 
+                    .service(get_all_list) 
+                    .service(upload_avatar)
     );
 }
 
@@ -55,7 +57,7 @@ async fn change_email(mut payload: web::types::Payload, req: web::HttpRequest) -
     let req_data = payload.parse::<ChangeEmailReq>().await?;
     let li: LanguageIdentifier = req_data.lang.parse().map_err(|_| UnknownLang)?;
 
-    let user_id: i32 = get_user_id(req);
+    let user_id: i32 = get_user_id(&req);
     let user = userDao::select_by_id_with_password(get_db_pool(), user_id)
         .await?
         .ok_or(NotFound)?;
@@ -97,7 +99,7 @@ struct ChangePasswordReq<'a> {
 async fn change_password(mut payload: web::types::Payload, req: web::HttpRequest) -> AppResult<impl Responder> {
     let mut payload = RequestPayload::new(&mut payload);
     let req_data = payload.parse::<ChangePasswordReq>().await?;
-    let user_id: i32 = get_user_id(req);
+    let user_id: i32 = get_user_id(&req);
     let user = userDao::select_by_id_with_password(get_db_pool(), user_id)
         .await?
         .ok_or(NotFound)?;
@@ -112,7 +114,7 @@ struct VerifyEmailReq<'a> {
     #[validate(length(min = 1, max = 50))]
     pub code: &'a str,
 }
-#[web::post("/v1/verify_email")]
+#[web::post("/verify_email")]
 async fn verify_email(mut payload: web::types::Payload) -> AppResult<impl Responder> {
     let mut payload = RequestPayload::new(&mut payload);
     let req_data = payload.parse::<VerifyEmailReq>().await?;
@@ -155,7 +157,7 @@ async fn get_all_list(mut payload: web::types::Payload, req: web::HttpRequest) -
     let req_data = payload.parse::<ListReq>().await?;
     req_data.validate()?;
 
-    let user_id = get_user_id(req);
+    let user_id = get_user_id(&req);
     check_permission_api(Some(user_id), "MANAGE_USER").await?;
 
     let users = userDao::get_list(
@@ -191,10 +193,36 @@ async fn get_all_list(mut payload: web::types::Payload, req: web::HttpRequest) -
 }
 
 #[web::post("/upload_avatar")]
-pub async fn upload_avatar(payload: web::types::Payload) -> AppResult<impl Responder> {
+pub async fn upload_avatar(payload: web::types::Payload, 
+    req: web::HttpRequest) -> AppResult<impl Responder> {
+    check_content_length(&req, get_config!(http).max_upload_size)?;
+    let _ = check_mime(&req, &ALLOWED_IMAGE_MIME)?;
+    
     let mut stream = StreamReader::new(payload.map_err(|e| {
         std::io::Error::new(std::io::ErrorKind::Other, e) 
     }));
-    FsProvider::upload_file(&mut stream, 1, "", "avatar-10.png").await?;
+    FsProvider::upload_file_internal(&mut stream, 
+        DEFAULT_POLICY_ID,
+        get_user_id(&req),
+        &Path::new("__user/avatar")
+    ).await?;
     Ok(web::HttpResponse::Ok().finish())
+}
+
+#[web::get("/avatar/{user_id}")]
+pub async fn get_avatar(path: web::types::Path<u32>) -> AppResult<impl Responder> {
+    let mut file = FsProvider::get_file(DEFAULT_POLICY_ID, 
+        path.into_inner() as i32, &Path::new("__user/avatar")).await?;
+    let mut header = file.read_i64().await.map_err(|e| {
+        tracing::error!("read i64 from file error: {}", e);
+        GlobalInternalError::IO
+    })?.to_ne_bytes();
+    header.reverse();
+    let ext_str: &'static str = sniffer::image_sniff(header).into();
+    let stream = ReaderChunkedStream::new(
+        AsyncReadMerger::new(Cursor::new(header), file)
+    );
+    
+    Ok(web::HttpResponse::Ok().header("content-type", format!("image/{ext_str}"))
+        .streaming(stream))
 }

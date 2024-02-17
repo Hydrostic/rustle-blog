@@ -51,5 +51,8 @@ impl AppService for FsService {
 #[derive(ErrorHelper)]
 #[err(user, default_msg)]
 pub enum FsUserError{
-    PolicyNotFound
+    PolicyNotFound,
+    PathNameNotValid
 }
+
+pub const DEFAULT_POLICY_ID: i32 = 1;

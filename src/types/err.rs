@@ -1,12 +1,11 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
-use salvo::http::StatusCode;
 
 use rustle_derive::ErrorHelper;
 #[derive(Debug)]
 pub enum AppError {
-    User(StatusCode, Cow<'static, str>),
-    Internal(StatusCode, Cow<'static, str>)
+    User(ntex::http::StatusCode, Cow<'static, str>),
+    Internal(ntex::http::StatusCode, Cow<'static, str>)
 }
 impl Display for AppError{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -14,13 +13,13 @@ impl Display for AppError{
     }
 }
 impl AppError {
-    pub fn new_user(status: StatusCode, message: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new_user(status: ntex::http::StatusCode, message: impl Into<Cow<'static, str>>) -> Self {
         AppError::User(status, message.into())
     }
-    pub fn new_internal(status: StatusCode, message: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new_internal(status: ntex::http::StatusCode, message: impl Into<Cow<'static, str>>) -> Self {
         AppError::Internal(status, message.into())
     }
-    pub fn status_code(&self) -> StatusCode {
+    pub fn status_code(&self) -> ntex::http::StatusCode {
         match self{
             AppError::User(status, _) => *status,
             AppError::Internal(status, _) => *status
@@ -48,6 +47,8 @@ pub enum GlobalUserError{
     InvalidParameter,
     #[err(code = 400)]
     InvalidPayload,
+    #[err(code = 400)]
+    InvalidMime,
     UnknownLang,
     #[err(code = 501)]
     FeatureNotEnabled,

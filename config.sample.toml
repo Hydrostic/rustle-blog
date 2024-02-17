@@ -8,6 +8,7 @@ host = ""
 [http]
 host = "127.0.0.1"
 port = 5800
+max_upload_size = 1_073_741_824
 
 [mail]
 host = ""
@@ -23,6 +24,3 @@ link = "https://rustleblog.com"
 
 [cache]
 max_user_role_entity = 50
-
-[fs]
-max-upload-size = 1_073_741_824

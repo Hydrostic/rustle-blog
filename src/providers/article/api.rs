@@ -16,9 +16,11 @@ pub fn init(cfg: &mut web::ServiceConfig){
     cfg.service(
         web::scope("/v1/article")
             .service(list)
-            .configure(|r| {
-                r.service(web::scope("/").wrap(Auth).service(create));
-            })
+    );
+    cfg.service(
+        web::scope("/v1/article")
+            .wrap(Auth)
+            .service(create)
     );
 }
 
@@ -49,7 +51,7 @@ async fn create(req: web::HttpRequest, mut payload: web::types::Payload) -> AppR
     let req_data: CreateReq<'_> = payload.parse().await?;
     req_data.validate()?;
     
-    let user_id = get_user_id(req);
+    let user_id = get_user_id(&req);
     check_permission_api(Some(user_id), "CREATE_ARTICLE").await?;
     let draft_content_id = articleDao::save_content(get_db_pool(), &req_data.draft).await?;
     let content_id = articleDao::save_content(get_db_pool(), &ammonia::clean(&req_data.generated)).await?;
