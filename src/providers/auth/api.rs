@@ -1,10 +1,13 @@
 use std::sync;
 use ntex::web::{self, Responder};
-use crate::types::err::GlobalUserError::CredentialUnauthorized;
+use crate::db::rbac::{self as rbacDao, role_vec_to_str, Role, DEFAULT_ROLE_STR};
+use crate::middlewares::Auth;
+use crate::providers::auth::service::check_permission_api;
+use crate::types::err::GlobalUserError::{CredentialUnauthorized, TooMaxParameter};
 use crate::db::{user as userDao, get_db_pool};
-use crate::utils::request::RequestPayload;
+use crate::utils::request::{get_user_id, RequestPayload};
 use crate::utils::{paseto, password_salt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use serde_json::json;
 use validator::Validate;
@@ -22,7 +25,12 @@ pub fn init(cfg: &mut web::ServiceConfig){
                         r.service(__test_add_user__)
                         .service(__test_get_token__);
                     }
-                })
+                }).service(
+                    web::scope("/").wrap(Auth)
+                            .service(modify_user_roles)
+                            .service(remove_role)
+                            .service(list_roles)
+                )
         );
         if get_args!(debug) {
             ONCE_INIT.call_once(|| {
@@ -64,12 +72,57 @@ async fn sign_in(mut payload: web::types::Payload) -> AppResult<impl Responder> 
         })
     ))
 }
-// #[web::get("/sign_out")]
-// async fn sign_out(req: &mut Request, depot: &mut Depot, res: &mut Response) -> AppResult<()> {
-//     let session = depot.session_mut().unwrap();
-//     session.remove("user_id");
-//     res.ok()
-// }
+#[derive(Deserialize, Debug)]
+struct ModifyUserRolesReq{
+    pub roles: Vec<i32>
+}
+#[web::post("/modify_user_roles")]
+async fn modify_user_roles(req_data: web::types::Json<ModifyUserRolesReq>, req: web::HttpRequest) -> AppResult<impl Responder> {
+    let user_id = get_user_id(&req);
+    check_permission_api(Some(user_id), "MANAGE_ROLE").await?;
+    let req_data = req_data.into_inner();
+    
+    rbacDao::update_user_roles(get_db_pool(), user_id, &role_vec_to_str(req_data.roles)?).await?;
+    Ok(web::HttpResponse::Ok().finish())
+}
+#[web::post("/remove_role/{role_id}")]
+async fn remove_role(path: web::types::Path<i32>, req: web::HttpRequest) -> AppResult<impl Responder> {
+    check_permission_api(Some(get_user_id(&req)), "MANAGE_ROLE").await?;
+    let role_id = path.into_inner();
+    rbacDao::delete_role(get_db_pool(), role_id).await??;
+    super::service::delete_role_cache(role_id);
+    Ok(web::HttpResponse::Ok().finish())
+}
+#[derive(Debug, Validate, Deserialize)]
+struct RoleListReq {
+    #[validate(range(min = 0, max = 100))]
+    limit: i32,
+    #[validate(range(min = 1,))]
+    page: i32,
+}
+#[derive(Serialize)]
+struct RoleListRes {
+    total: i32,
+    roles: Vec<Role>,
+}
+#[web::get("/list_roles")]
+async fn list_roles(req: web::HttpRequest, req_data: web::types::Json<RoleListReq>) -> AppResult<impl Responder> {
+    check_permission_api(Some(get_user_id(&req)), "MANAGE_ROLE").await?;
+    let db_data = rbacDao::list_roles(get_db_pool(), 
+    req_data.limit, 
+    (req_data.page - 1).checked_mul(req_data.limit).ok_or(TooMaxParameter)?).await?;
+    req_data.validate()?;
+    Ok(web::HttpResponse::Ok().json(
+        &RoleListRes{ 
+            total: db_data.0,
+            roles: db_data.1,
+        }
+    ))
+}
+// async fn add_role
+// async fn list_roles
+// async fn modify_role_permissions
+
 #[derive(Debug, Validate, Deserialize)]
 struct TestAddUser<'a> {
     #[validate(length(min = 1, max = 50))]
@@ -92,7 +145,8 @@ async fn __test_add_user__(mut payload: web::types::Payload) -> AppResult<impl R
         get_db_pool(),
         &req_data.name,
         &req_data.email,
-        &hashed_password
+        &hashed_password,
+        DEFAULT_ROLE_STR
     )
     .await?;
     Ok(web::HttpResponse::Ok().body(json!({
@@ -112,3 +166,4 @@ async fn __test_get_token__(user: web::types::Query<TestGetTokenReq>) -> AppResu
         })
     ))
 }
+

@@ -16,11 +16,10 @@ pub fn init(cfg: &mut web::ServiceConfig){
     cfg.service(
         web::scope("/v1/article")
             .service(list)
-    );
-    cfg.service(
-        web::scope("/v1/article")
-            .wrap(Auth)
-            .service(create)
+            .service(
+                web::scope("/").wrap(Auth)
+                    .service(create)
+            )
     );
 }
 

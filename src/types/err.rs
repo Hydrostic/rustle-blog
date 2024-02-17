@@ -55,7 +55,8 @@ pub enum GlobalUserError{
     #[err(code = 413)]
     PayloadTooLarge,
     #[err(code = 411)]
-    PayloadLengthRequired
+    PayloadLengthRequired,
+    SystemReserved
 }
 
 #[derive(ErrorHelper)]

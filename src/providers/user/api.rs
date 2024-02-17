@@ -1,5 +1,5 @@
 use super::service::{send_tolink_email, send_verify_email};
-use crate::db::rbac::RoleSimple;
+use crate::db::rbac::{RoleSimple, UserRoleSimple};
 use crate::db::user::User;
 use crate::db::{get_db_pool, rbac as rbacDao, user as userDao, verification as verificationDao};
 use crate::external::fs::interface::FsProvider;
@@ -31,13 +31,13 @@ pub fn init(cfg: &mut web::ServiceConfig){
         web::scope("/v1/user")
             .service(verify_email)
             .service(get_avatar)
-    );
-    cfg.service(
-        web::scope("/v1/user1").wrap(Auth)
-                    .service(change_email)
-                    .service(change_password) 
-                    .service(get_all_list) 
-                    .service(upload_avatar)
+            .service(
+                web::scope("/").wrap(Auth)
+                .service(change_email)
+                .service(change_password) 
+                .service(get_all_list) 
+                .service(upload_avatar)
+            )
     );
 }
 
@@ -149,7 +149,7 @@ struct ListReq {
 struct ListRes {
     #[serde(flatten)]
     pub user: User,
-    pub roles: Vec<RoleSimple>,
+    pub role_infos: Vec<RoleSimple>,
 }
 #[web::post("/get_all_list")]
 async fn get_all_list(mut payload: web::types::Payload, req: web::HttpRequest) -> AppResult<impl Responder> {
@@ -176,16 +176,17 @@ async fn get_all_list(mut payload: web::types::Payload, req: web::HttpRequest) -
             .into_iter()
             .map(|t| {
                 let uid = t.id;
+                let role_single = roles
+                .iter()
+                .filter(|r| r.user == uid).collect::<Vec<&UserRoleSimple>>();
                 ListRes {
                     user: t,
-                    roles: roles
-                        .iter()
-                        .filter(|r| r.user == uid)
-                        .map(|r| RoleSimple {
-                            id: r.id,
-                            name: r.name.to_owned(),
-                        })
-                        .collect(),
+                    role_infos: if role_single.len() > 0 {
+                        role_single[0].roles.clone()
+                    } else {
+                        vec![]
+                    },
+                        
                 }
             })
             .collect::<Vec<ListRes>>(),

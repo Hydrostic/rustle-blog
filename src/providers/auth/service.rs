@@ -15,7 +15,7 @@ pub async fn check_permission_api(user_id: Option<i32>, permission: &str) -> App
             vec![0]
         },
         Some(id) => {
-            rbacDao::select_user_role(get_db_pool(), id).await?
+            rbacDao::role_str_to_vec(rbacDao::select_user_role(get_db_pool(), id).await?)?
         }
     };
     if user_roles.len() == 0{
@@ -36,7 +36,11 @@ pub async fn check_permission_api(user_id: Option<i32>, permission: &str) -> App
     Ok(())
 }
 
-
+pub fn delete_role_cache(role: i32){
+    PERMISSION_CACHE.iter_mut().for_each(|mut arr| {
+        arr.retain(|&r| r != role)
+    })
+}
 pub struct RBACService;
 impl AppService for RBACService{
 

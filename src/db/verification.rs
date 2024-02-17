@@ -33,7 +33,7 @@ pub async fn select_by_id(
     pool: &MySqlPool,
     id: i32
 ) -> DBResult<Option<Verification>> {
-    Ok(sqlx::query_as::<_,Verification>("SELECT * FROM verifications WHERE id = ?")
+    Ok(sqlx::query_as::<_,Verification>("SELECT * FROM verifications WHERE id = ? LIMIT 1")
         .bind(id)
         .fetch_optional(pool)
         .await?)

@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::{Serialize,Deserialize};
 
 use sqlx::mysql::MySqlRow;
@@ -13,6 +14,9 @@ pub struct User{
     pub email: String,
     #[serde(skip)]
     pub password: Option<String>,
+    pub avatar_time: NaiveDateTime,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub roles: Option<String>
 }
 impl<'r> FromRow<'r, MySqlRow> for User{
     fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
@@ -20,7 +24,9 @@ impl<'r> FromRow<'r, MySqlRow> for User{
             id: row.try_get("id")?,
             name: row.try_get("name")?,
             email: row.try_get("email")?,
-            password: row.try_get("password").unwrap_or(None)
+            password: row.try_get("password").unwrap_or(None),
+            avatar_time: row.try_get("avatar_time")?,
+            roles: row.try_get("roles").unwrap_or(None)
         })
     }
 }
@@ -34,7 +40,7 @@ pub async fn select_by_identity_with_password(
     pool: &MySqlPool,
     identity: &str
 ) -> DBResult<Option<User>> {
-    sqlx::query_as::<_,User>("SELECT * FROM users WHERE name = ? OR email = ?")
+    sqlx::query_as::<_,User>("SELECT * FROM users WHERE name = ? OR email = ? LIMIT 1")
         .bind(identity)
         .bind(identity)
         .fetch_optional(pool)
@@ -46,7 +52,7 @@ pub async fn select_by_id(
     pool: &MySqlPool,
     id: i32
 ) -> DBResult<Option<User>> {
-    sqlx::query_as::<_,User>("SELECT id,name,email FROM users WHERE id = ?")
+    sqlx::query_as::<_,User>("SELECT id,name,email FROM users WHERE id = ? LIMIT 1")
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -57,7 +63,7 @@ pub async fn select_by_id_with_password(
     pool: &MySqlPool,
     id: i32
 ) -> DBResult<Option<User>> {
-    sqlx::query_as::<_,User>("SELECT * FROM users WHERE id = ?")
+    sqlx::query_as::<_,User>("SELECT * FROM users WHERE id = ? LIMIT 1")
         .bind(id)
         .fetch_optional(pool)
         .await
@@ -68,7 +74,7 @@ pub async fn select_by_email(
     pool: &MySqlPool,
     email: &str
 ) -> DBResult<Option<User>> {
-    sqlx::query_as::<_,User>("SELECT id,name,email FROM users WHERE email = ?")
+    sqlx::query_as::<_,User>("SELECT id,name,email FROM users WHERE email = ? LIMIT 1")
         .bind(email)
         .fetch_optional(pool)
         .await
@@ -79,12 +85,14 @@ pub async fn create(
     pool: &MySqlPool,
     name: &str,
     email: &str,
-    password: &str
+    password: &str,
+    roles: &str
 ) -> DBResult<i32> {
-    Ok(sqlx::query("INSERT INTO users (name,email,password) VALUES (?,?,?)")
+    Ok(sqlx::query("INSERT INTO users (name,email,password,avatar_time,roles) VALUES (?,?,?,now(),?)")
         .bind(name)
         .bind(email)
         .bind(password)
+        .bind(roles)
         .execute(pool)
         .await?.last_insert_id() as i32)
 }
@@ -119,7 +127,7 @@ pub async fn update_email(
 
 #[instrument(err,skip_all)]
 pub async fn get_list(pool: &MySqlPool, limit: i32, offset: i32) -> DBResult<Vec<User>> {
-    let res: Vec<User> = sqlx::query_as("SELECT id,email,name FROM users LIMIT ?,?")
+    let res: Vec<User> = sqlx::query_as("SELECT id,email,name,avatar_time FROM users LIMIT ?,?")
     .bind(offset)
     .bind(limit)
     .fetch_all(pool)
