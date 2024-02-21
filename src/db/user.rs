@@ -15,9 +15,10 @@ pub struct User{
     #[serde(skip)]
     pub password: Option<String>,
     pub avatar_time: NaiveDateTime,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub roles: Option<String>
+    #[serde(skip)]
+    pub roles: Option<Vec<i32>>
 }
+
 impl<'r> FromRow<'r, MySqlRow> for User{
     fn from_row(row: &MySqlRow) -> Result<Self, sqlx::Error> {
         Ok(Self{
@@ -26,7 +27,13 @@ impl<'r> FromRow<'r, MySqlRow> for User{
             email: row.try_get("email")?,
             password: row.try_get("password").unwrap_or(None),
             avatar_time: row.try_get("avatar_time")?,
-            roles: row.try_get("roles").unwrap_or(None)
+            roles: row.try_get::<String, _>("roles").map_or(None, |t| {
+                if t.is_empty(){
+                    Some(vec![])
+                }else{
+                    Some(t.split(",").filter_map(|r| r.parse::<i32>().ok()).collect())
+                }
+            })
         })
     }
 }
@@ -127,7 +134,7 @@ pub async fn update_email(
 
 #[instrument(err,skip_all)]
 pub async fn get_list(pool: &MySqlPool, limit: i32, offset: i32) -> DBResult<Vec<User>> {
-    let res: Vec<User> = sqlx::query_as("SELECT id,email,name,avatar_time FROM users LIMIT ?,?")
+    let res: Vec<User> = sqlx::query_as("SELECT id,email,name,avatar_time,roles FROM users LIMIT ?,?")
     .bind(offset)
     .bind(limit)
     .fetch_all(pool)

@@ -1,5 +1,3 @@
-#![feature(cow_is_borrowed)]
-#![feature(let_chains)]
 use crate::db::DBService;
 use crate::external::fs::FsService;
 use crate::external::mail::MailService;

@@ -30,6 +30,7 @@ pub fn init(cfg: &mut web::ServiceConfig){
                             .service(modify_user_roles)
                             .service(remove_role)
                             .service(list_roles)
+                            .service(add_role)
                 )
         );
         if get_args!(debug) {
@@ -119,9 +120,51 @@ async fn list_roles(req: web::HttpRequest, req_data: web::types::Json<RoleListRe
         }
     ))
 }
-// async fn add_role
-// async fn list_roles
-// async fn modify_role_permissions
+#[derive(Debug, Validate, Deserialize)]
+struct AddRoleReq<'a> {
+    #[validate(length(min = 0, max = 50))]
+    name: Cow<'a, str>,
+    #[validate(length(min = 0, max = 50))]
+    alias: &'a str,
+    permissions: Vec<&'a str>
+    // todo: further check
+}
+#[web::post("/add_role")]
+async fn add_role(req: web::HttpRequest, mut payload: web::types::Payload) -> AppResult<impl Responder> {
+    let mut payload = RequestPayload::new(&mut payload);
+    let req_data: AddRoleReq<'_> = payload.parse().await?;
+
+    req_data.validate()?;
+    check_permission_api(Some(get_user_id(&req)), "MANAGE_ROLE").await?;
+    let _ = rbacDao::add_role(get_db_pool(), &req_data.name, req_data.alias, req_data.permissions).await?;
+    Ok(web::HttpResponse::Ok().finish())
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ModifyRolePermissionAction{
+    Remove,
+    Add
+}
+#[derive(Debug, Validate, Deserialize)]
+struct ModifyRolePermissionReq<'a> {
+    role: i32,
+    permission: &'a str,
+    action: ModifyRolePermissionAction
+}
+#[web::post("/modify_role_permission")]
+async fn modify_role_permission(req: web::HttpRequest, mut payload: web::types::Payload) -> AppResult<impl Responder>{
+    let mut payload = RequestPayload::new(&mut payload);
+    let req_data: ModifyRolePermissionReq<'_> = payload.parse().await?;
+
+    req_data.validate()?;
+    check_permission_api(Some(get_user_id(&req)), "MANAGE_ROLE").await?;
+    match req_data.action{
+        ModifyRolePermissionAction::Remove => rbacDao::delete_role_permission(get_db_pool(), req_data.role, req_data.permission).await?,
+        ModifyRolePermissionAction::Add => rbacDao::add_role_permission(get_db_pool(), req_data.role, req_data.permission).await?
+    };
+    
+    Ok(web::HttpResponse::Ok().finish())
+}
 
 #[derive(Debug, Validate, Deserialize)]
 struct TestAddUser<'a> {
@@ -157,6 +200,7 @@ async fn __test_add_user__(mut payload: web::types::Payload) -> AppResult<impl R
 struct TestGetTokenReq {
     pub id: i32
 }
+// debug mode only
 #[web::get("/__test_get_token__")]
 async fn __test_get_token__(user: web::types::Query<TestGetTokenReq>) -> AppResult<impl Responder> {
     let token = generate_access_token(&get_config!(security).auth_token_secret, user.id)?;

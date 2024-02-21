@@ -1,5 +1,5 @@
 use super::service::{send_tolink_email, send_verify_email};
-use crate::db::rbac::{RoleSimple, UserRoleSimple};
+use crate::db::rbac::RoleSimple;
 use crate::db::user::User;
 use crate::db::{get_db_pool, rbac as rbacDao, user as userDao, verification as verificationDao};
 use crate::external::fs::interface::FsProvider;
@@ -16,6 +16,7 @@ use crate::utils::{password_salt, sniffer};
 use crate::utils::request::{check_content_length, check_mime, get_user_id, RequestPayload, ALLOWED_IMAGE_MIME};
 use fluent_templates::LanguageIdentifier;
 use futures_util::TryStreamExt;
+use rustle_derive::JoinHelper;
 use crate::utils::stream::{AsyncReadMerger, ReaderChunkedStream};
 use ntex::web::{self, Responder};
 use serde::{Deserialize, Serialize};
@@ -145,10 +146,12 @@ struct ListReq {
     #[validate(range(min = 1,))]
     page: i32,
 }
-#[derive(Serialize)]
+#[derive(Serialize, JoinHelper)]
 struct ListRes {
+    #[foreign_key(key = roles, type = Option<Vec<i32>>)]
     #[serde(flatten)]
     pub user: User,
+    #[foreign_object]
     pub role_infos: Vec<RoleSimple>,
 }
 #[web::post("/get_all_list")]
@@ -168,28 +171,11 @@ async fn get_all_list(mut payload: web::types::Payload, req: web::HttpRequest) -
             .ok_or(TooMaxParameter)?,
     )
     .await?;
-    let roles =
-        rbacDao::select_user_role_info(get_db_pool(), users.iter().map(|t| t.id).collect()).await?;
+    let mut res = users.into_iter().map(|u| ListRes{user: u, role_infos: Vec::with_capacity(2)}).collect();
+    rbacDao::join_user_role_info(get_db_pool(), &mut res).await?;
 
     Ok(web::HttpResponse::Ok().json(
-        &users
-            .into_iter()
-            .map(|t| {
-                let uid = t.id;
-                let role_single = roles
-                .iter()
-                .filter(|r| r.user == uid).collect::<Vec<&UserRoleSimple>>();
-                ListRes {
-                    user: t,
-                    role_infos: if role_single.len() > 0 {
-                        role_single[0].roles.clone()
-                    } else {
-                        vec![]
-                    },
-                        
-                }
-            })
-            .collect::<Vec<ListRes>>(),
+        &res
     ))
 }
 

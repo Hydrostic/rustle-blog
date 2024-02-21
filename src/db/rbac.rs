@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use rustle_derive::ErrorHelper;
 use serde::Serialize;
-use sqlx::{Executor, MySqlPool, Row};
+use sqlx::{Executor, MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::types::err::{AppResult, GlobalUserError};
+use crate::types::{err::{AppResult, GlobalUserError}, join::Joinable};
 
 use super::DBResult;
 use tracing::instrument;
@@ -29,11 +27,17 @@ pub struct RoleSimple{
     pub id: i32,
     pub name: String,
 }
-#[derive(Serialize,Debug,FromRow,Clone)]
-pub struct UserRoleSimple{
-    pub user: i32,
-    pub roles: Vec<RoleSimple>,
-}
+
+
+// design
+// pub struct xx{
+//  #[foreign_key]    
+// }
+// #[derive(Serialize,Debug,FromRow,Clone)]
+// pub struct UserRoleSimple{
+//     pub user: i32,
+//     pub roles: Vec<RoleSimple>,
+// }
 pub const DEFAULT_ROLE_STR: &'static str = "0,1";
 #[instrument(err,skip_all)]
 pub async fn select_permission_to_roles(
@@ -108,48 +112,96 @@ pub async fn delete_role(
     tx.execute(sqlx::query(r#"
         DELETE FROM permission_to_roles WHERE role = ?;
         "#).bind(role)).await?;
-        tx.execute(sqlx::query(r#"
+    tx.execute(sqlx::query(r#"
         DELETE FROM roles WHERE id = ?;
         "#).bind(role)).await?;
+    // todo: improve
     tx.commit().await?;
     Ok(Ok(()))
 }
 
-use futures_util::stream::TryStreamExt;
 #[instrument(err,skip_all)]
-pub async fn select_user_role_info(
+pub async fn add_role(
     pool: &MySqlPool,
-    user: Vec<i32>
-) -> DBResult<Vec<UserRoleSimple>> {
-    let user_roles: Vec<(String, i32)> = sqlx::query_as(r#"
-        SELECT roles,id FROM users WHERE id in (?)
-    "#).bind(user.iter().map(|t| t.to_string()).collect::<Vec<String>>().join(",")).fetch_all(pool).await?;
-    let mut role_ids: Vec<i32> = Vec::with_capacity(user_roles.len());
-    user_roles.iter().for_each(|(role_str,_)| {
-        role_ids.extend_from_slice(&role_str.split(",").map(|t| t.parse()).collect::<Result<Vec<i32>, _>>().unwrap_or(vec![]));
+    name: &str,
+    alias: &str,
+    permissions: Vec<&str>
+) -> DBResult<AppResult<()>> {
+    let mut tx = pool.begin().await?;
+    let role_id = tx.execute(sqlx::query(r#"
+        INSERT INTO roles (name,alias,role_type) VALUES (?,?,0)
+    "#).bind(name).bind(alias)
+    ).await?.last_insert_id();
+    let mut query_builder: QueryBuilder<MySql> = QueryBuilder::new(
+        // Note the trailing space
+        "INSERT INTO permission_to_roles(role, permission) "
+    );
+    
+    query_builder.push_values(permissions, |mut b, entry| {
+        b.push_bind(role_id).push_bind(entry);
     });
-    let mut role_map: HashMap<i32, String> = HashMap::with_capacity(role_ids.len());
-    let mut role_info_res = sqlx::query(r#"
-        SELECT id,name FROM roles WHERE id in (?)"#)
-        .bind(role_ids.iter().map(|t| t.to_string()).collect::<Vec<String>>().join(",")).fetch(pool);
-    while let Some(t) = role_info_res.try_next().await?{
-        role_map.insert(t.try_get("id")?, t.try_get("name")?);
-    }
-    Ok(user_roles.into_iter().map(|t| {
-        UserRoleSimple{
-            user: t.1,
-            roles: t.0.split(",").filter_map(|t| {
-                let role_id = match t.parse(){
-                    Err(_) => return None,
-                    Ok(t) => t
-                };
-                Some(RoleSimple{
-                    id: role_id,
-                    name: role_map.get(&role_id).unwrap_or(&String::from("")).to_owned()
-                })
-            }).collect()
+    tx.execute(query_builder.build()).await?;
+    tx.commit().await?;
+    Ok(Ok(()))
+}
+
+#[instrument(err,skip_all)]
+pub async fn delete_role_permission(
+    pool: &MySqlPool,
+    role: i32,
+    permission: &str
+) -> DBResult<()> {
+    sqlx::query("DELETE roles WHERE role = ? AND permission = ?")
+        .bind(role)
+        .bind(permission)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+#[instrument(err,skip_all)]
+pub async fn add_role_permission(
+    pool: &MySqlPool,
+    role: i32,
+    permission: &str
+) -> DBResult<()> {
+    sqlx::query("INSERT INTO roles (role, permission) VALUES (?,?)")
+        .bind(role)
+        .bind(permission)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+#[instrument(err,skip_all)]
+pub async fn join_user_role_info(
+    pool: &MySqlPool,
+    outer: &mut Vec<impl Joinable<Option<Vec<i32>>, Vec<RoleSimple>>>
+) -> DBResult<()>{
+    let mut role_ids: Vec<i32> = Vec::with_capacity(outer.len());
+    for entry in &mut *outer{
+        if let Some(t) = entry.get_ref().0{
+            role_ids.extend(t);
         }
-    }).collect())
+    }
+    let role_infos: Vec<RoleSimple> = sqlx::query_as(&format!("SELECT id,name FROM roles WHERE id in ({})",
+        role_ids.iter().map(|t| t.to_string()).collect::<Vec<String>>().join(",")
+    )).fetch_all(pool).await?;
+    for entry in &mut *outer {
+        let entry = entry.get_ref();
+        let key = match entry.0{
+            None => continue,
+            Some(t) => t
+        };
+        entry.1.extend(
+            role_infos.iter().filter_map(|role| {
+                if key.contains(&role.id){
+                    Some(role.clone())
+                }else{
+                    None
+                }
+            })
+        );
+    }
+    Ok(())
 }
 
 #[derive(ErrorHelper)]
@@ -168,6 +220,12 @@ pub fn role_vec_to_str(roles: Vec<i32>) -> AppResult<String>{
     }
 }
 pub fn role_str_to_vec(roles: String) -> AppResult<Vec<i32>>{
-    roles.split(",").map(|t| t.parse()).collect::<Result<Vec<i32>, _>>()
-        .map_err(|_| RBACUserError::RoleStrCorrupted.into())
+    if roles.is_empty() {
+        Ok(vec![])
+    }else{
+        roles.split(",").map(|t| t.parse()).collect::<Result<Vec<i32>, _>>()
+        .map_err(|_| 
+            RBACUserError::RoleStrCorrupted.into()
+        )
+    }
 }
